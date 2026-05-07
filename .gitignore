@@ -1,0 +1,44 @@
+## Build output
+bin/
+obj/
+out/
+publish/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Rider / ReSharper
+.idea/
+*.sln.iml
+_ReSharper*/
+*.ReSharper
+
+## OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+## Logs / temp
+*.log
+*.tmp
+*.temp
+
+## Installer build output
+DeploymentTool.Installer/bin/
+DeploymentTool.Installer/obj/
+
+## Claude Code local settings (machine-specific)
+.claude/settings.local.json
