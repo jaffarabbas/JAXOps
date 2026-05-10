@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -6,7 +7,11 @@ namespace DeploymentTool.Helpers;
 
 public static class JsonFlattenHelper
 {
-    private static readonly JsonSerializerOptions WriteOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions WriteOptions = new()
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
     // Lenient parse options: allow trailing commas and // comments (common in real appsettings.json)
     private static readonly JsonDocumentOptions ParseOptions = new()

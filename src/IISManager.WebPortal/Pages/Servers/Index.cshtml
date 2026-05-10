@@ -1,0 +1,69 @@
+@page
+@model IISManager.WebPortal.Pages.Servers.ServersIndexModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Servers";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-hdd-network me-2 text-primary"></i>Servers</h1>
+    <a href="/Servers/Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>Add Server
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Name</th><th>Hostname</th><th>IP</th><th>Environment</th>
+                    <th>Status</th><th>Last Heartbeat</th><th>Agent</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var s in Model.Servers)
+                {
+                    var badgeCss = s.Status.ToString() switch
+                    {
+                        "Online" => "bg-success",
+                        "Offline" => "bg-danger",
+                        "Warning" => "bg-warning text-dark",
+                        _ => "bg-secondary"
+                    };
+                    <tr>
+                        <td><a href="/Servers/Details?id=@s.Id" class="fw-semibold text-decoration-none">@s.Name</a></td>
+                        <td>@s.Hostname</td>
+                        <td><code>@s.IpAddress</code></td>
+                        <td><span class="badge bg-secondary">@s.Environment</span></td>
+                        <td><span class="badge @badgeCss">@s.Status</span></td>
+                        <td class="text-muted small">@(s.LastHeartbeat?.ToString("dd/MM HH:mm:ss") ?? "Never")</td>
+                        <td class="text-muted small">@(s.AgentVersion ?? "—")</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="/Servers/Details?id=@s.Id" class="btn btn-outline-primary">
+                                    <i class="bi bi-gear"></i>
+                                </a>
+                                <form method="post" asp-page-handler="SyncIIS" style="display:inline">
+                                    <input type="hidden" name="serverId" value="@s.Id" />
+                                    <button class="btn btn-outline-secondary" title="Sync IIS State">
+                                        <i class="bi bi-arrow-repeat"></i>
+                                    </button>
+                                </form>
+                                <form method="post" asp-page-handler="Delete"
+                                      onsubmit="return confirm('Delete server @s.Name?')" style="display:inline">
+                                    <input type="hidden" name="serverId" value="@s.Id" />
+                                    <button class="btn btn-outline-danger"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Servers.Any())
+                {
+                    <tr><td colspan="8" class="text-center text-muted py-4">No servers registered yet. <a href="/Servers/Create">Add one.</a></td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

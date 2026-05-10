@@ -1,0 +1,188 @@
+@page
+@model IISManager.WebPortal.Pages.IndexModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard</h1>
+    <span class="text-muted small">Live updates via SignalR</span>
+</div>
+
+<!-- Summary cards -->
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 rounded-circle bg-success bg-opacity-10 p-3">
+                        <i class="bi bi-hdd-network text-success fs-4"></i>
+                    </div>
+                    <div class="ms-3">
+                        <div class="fs-4 fw-bold" id="stat-online">@Model.OnlineServers</div>
+                        <div class="text-muted small">Online Servers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 rounded-circle bg-danger bg-opacity-10 p-3">
+                        <i class="bi bi-exclamation-triangle text-danger fs-4"></i>
+                    </div>
+                    <div class="ms-3">
+                        <div class="fs-4 fw-bold" id="stat-offline">@Model.OfflineServers</div>
+                        <div class="text-muted small">Offline Servers</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 rounded-circle bg-primary bg-opacity-10 p-3">
+                        <i class="bi bi-rocket text-primary fs-4"></i>
+                    </div>
+                    <div class="ms-3">
+                        <div class="fs-4 fw-bold">@Model.TodayDeployments</div>
+                        <div class="text-muted small">Deployments Today</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0 rounded-circle bg-warning bg-opacity-10 p-3">
+                        <i class="bi bi-arrow-repeat text-warning fs-4"></i>
+                    </div>
+                    <div class="ms-3">
+                        <div class="fs-4 fw-bold">@Model.ActiveDeployments</div>
+                        <div class="text-muted small">Active Deployments</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Server cards -->
+<h5 class="mb-3">Server Status</h5>
+<div class="row g-3 mb-4" id="server-cards-container">
+    @foreach (var server in Model.Servers)
+    {
+        var borderColor = server.Status.ToString() switch
+        {
+            "Online" => "border-success",
+            "Offline" => "border-danger",
+            "Warning" => "border-warning",
+            _ => "border-secondary"
+        };
+        var statusColor = server.Status.ToString() switch
+        {
+            "Online" => "text-success",
+            "Offline" => "text-danger",
+            "Warning" => "text-warning",
+            _ => "text-secondary"
+        };
+        <div class="col-md-6 col-xl-4" id="server-card-@server.Id">
+            <div class="card border-start border-4 @borderColor border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <h6 class="mb-0 fw-bold">@server.Name</h6>
+                        <span class="badge @(server.IsOnline ? "bg-success" : "bg-danger")">@server.Status</span>
+                    </div>
+                    <div class="text-muted small mb-2">
+                        <i class="bi bi-globe me-1"></i>@server.Hostname
+                        <span class="badge bg-secondary ms-2">@server.Environment</span>
+                    </div>
+                    @{
+                        var health = Model.HealthByServer.GetValueOrDefault(server.Id);
+                    }
+                    @if (health != null)
+                    {
+                        <div class="mb-1">
+                            <div class="d-flex justify-content-between small">
+                                <span>CPU</span><span>@health.CpuPercent%</span>
+                            </div>
+                            <div class="progress" style="height:4px">
+                                <div class="progress-bar @(health.CpuPercent > 85 ? "bg-danger" : "bg-primary")"
+                                     style="width:@health.CpuPercent%"></div>
+                            </div>
+                        </div>
+                        <div class="mb-1">
+                            <div class="d-flex justify-content-between small">
+                                <span>RAM</span><span>@health.RamPercent%</span>
+                            </div>
+                            <div class="progress" style="height:4px">
+                                <div class="progress-bar @(health.RamPercent > 85 ? "bg-danger" : "bg-info")"
+                                     style="width:@health.RamPercent%"></div>
+                            </div>
+                        </div>
+                        <div class="text-muted small mt-2">
+                            <i class="bi bi-globe2 me-1"></i>@health.RunningSites sites running
+                        </div>
+                    }
+                    <div class="mt-2">
+                        <a href="/Servers/Details?id=@server.Id" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-gear"></i> Manage
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Recent deployments -->
+<h5 class="mb-3">Recent Deployments</h5>
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th><th>Application</th><th>Version</th><th>Status</th><th>Deployed By</th><th>Started</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model.RecentDeployments)
+                {
+                    var statusBadge = d.Status.ToString() switch
+                    {
+                        "Succeeded" => "bg-success",
+                        "Failed" => "bg-danger",
+                        "InProgress" => "bg-primary",
+                        "Queued" => "bg-secondary",
+                        "RolledBack" => "bg-warning",
+                        _ => "bg-secondary"
+                    };
+                    <tr>
+                        <td><span class="text-muted">#@d.Id</span></td>
+                        <td>@d.ApplicationName</td>
+                        <td><code>@d.Version</code></td>
+                        <td><span class="badge @statusBadge">@d.StatusLabel</span></td>
+                        <td>@d.DeployedBy</td>
+                        <td>@(d.StartedAt?.ToString("HH:mm dd/MM") ?? "—")</td>
+                        <td>
+                            <a href="/Deployments/Console?id=@d.Id" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-terminal"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/monitoring.js"></script>
+}

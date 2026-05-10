@@ -20,8 +20,9 @@ public partial class MainWindow : Window
 
         if (DataContext is MainViewModel vm)
         {
-            vm.LogEntries.CollectionChanged       += OnLogEntriesChanged;
-            vm.Deploy.DeployLog.CollectionChanged += OnDeployLogChanged;
+            vm.LogEntries.CollectionChanged               += OnLogEntriesChanged;
+            vm.Deploy.DeployLog.CollectionChanged         += OnDeployLogChanged;
+            vm.Transfer.TransferLog.CollectionChanged     += OnTransferLogChanged;
             vm.PropertyChanged += OnViewModelPropertyChanged;
         }
     }
@@ -44,6 +45,18 @@ public partial class MainWindow : Window
         {
             if (DeployLogList.Items.Count > 0)
                 DeployLogList.ScrollIntoView(DeployLogList.Items[^1]);
+        }, DispatcherPriority.Background);
+    }
+
+    private void OnTransferLogChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action is not NotifyCollectionChangedAction.Add)
+            return;
+
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (TransferLogList.Items.Count > 0)
+                TransferLogList.ScrollIntoView(TransferLogList.Items[^1]);
         }, DispatcherPriority.Background);
     }
 
@@ -110,6 +123,12 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel vm && sender is PasswordBox pb)
             vm.Deploy.Password = pb.Password;
+    }
+
+    private void TransferPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm && sender is PasswordBox pb)
+            vm.Transfer.Password = pb.Password;
     }
 
     private bool TrySelectEditorMatch(string term, bool findNext, bool focusEditor)

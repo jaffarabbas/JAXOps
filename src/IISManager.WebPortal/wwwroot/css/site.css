@@ -1,0 +1,74 @@
+/* IIS Manager Portal — Global Styles */
+
+:root {
+    --sidebar-width: 220px;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Sidebar */
+.sidebar {
+    min-height: calc(100vh - 56px);
+    background-color: #1a1d23 !important;
+}
+
+.sidebar .nav-link {
+    border-radius: 6px;
+    font-size: 0.875rem;
+    padding: 0.45rem 0.75rem;
+    transition: background-color 0.15s;
+}
+
+.sidebar .nav-link:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+
+.sidebar .nav-link.active {
+    background-color: #0d6efd !important;
+}
+
+/* Cards */
+.card {
+    border-radius: 10px;
+}
+
+/* Log console */
+#log-container .log-line {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.6;
+    transition: background-color 0.1s;
+}
+
+#log-container .log-line:hover {
+    background-color: rgba(255,255,255,0.05);
+}
+
+.log-line.log-error { color: #f87171 !important; }
+.log-line.log-warning { color: #fbbf24 !important; }
+.log-line.log-success { color: #4ade80 !important; }
+
+/* Status badge sizing */
+.badge { font-weight: 500; }
+
+/* Progress bars */
+.progress { border-radius: 99px; }
+
+/* Tables */
+.table td { vertical-align: middle; }
+
+/* Monospace code blocks */
+code { font-size: 0.8rem; }
+
+/* Notification bell */
+#notification-bell:hover .bi-bell { color: #ffd700 !important; }
+
+/* Smooth fade for live updates */
+.live-update {
+    animation: flash 0.4s ease-out;
+}
+@keyframes flash {
+    0%   { background-color: rgba(13,110,253,0.15); }
+    100% { background-color: transparent; }
+}

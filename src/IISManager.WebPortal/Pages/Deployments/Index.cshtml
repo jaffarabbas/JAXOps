@@ -1,0 +1,102 @@
+@page
+@model IISManager.WebPortal.Pages.Deployments.DeploymentsIndexModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Deployments";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-rocket me-2 text-primary"></i>Deployments</h1>
+    <a href="/Deployments/Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>New Deployment
+    </a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-bottom">
+        <form method="get" class="d-flex gap-2">
+            <select name="status" class="form-select form-select-sm" style="width:160px">
+                <option value="">All Statuses</option>
+                <option value="Queued" selected="@(Model.StatusFilter == "Queued")">Queued</option>
+                <option value="InProgress" selected="@(Model.StatusFilter == "InProgress")">In Progress</option>
+                <option value="Succeeded" selected="@(Model.StatusFilter == "Succeeded")">Succeeded</option>
+                <option value="Failed" selected="@(Model.StatusFilter == "Failed")">Failed</option>
+                <option value="RolledBack" selected="@(Model.StatusFilter == "RolledBack")">Rolled Back</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary">Filter</button>
+        </form>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>#</th><th>Application</th><th>Version</th><th>Mode</th>
+                    <th>Status</th><th>Servers</th><th>Deployed By</th><th>Started</th><th>Duration</th><th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var d in Model.Deployments.Items)
+                {
+                    var badgeCss = d.Status.ToString() switch
+                    {
+                        "Succeeded" => "bg-success",
+                        "Failed" => "bg-danger",
+                        "InProgress" => "bg-primary",
+                        "Queued" => "bg-secondary",
+                        "RolledBack" => "bg-warning text-dark",
+                        "PartialSuccess" => "bg-warning",
+                        _ => "bg-secondary"
+                    };
+                    <tr>
+                        <td class="text-muted">#@d.Id</td>
+                        <td>@d.ApplicationName</td>
+                        <td><code>@d.Version</code></td>
+                        <td><span class="badge bg-light text-dark border">@d.Mode</span></td>
+                        <td><span class="badge @badgeCss">@d.StatusLabel</span></td>
+                        <td class="small">@d.Targets.Count server(s)</td>
+                        <td class="small">@d.DeployedBy</td>
+                        <td class="small text-muted">@(d.StartedAt?.ToString("dd/MM HH:mm") ?? "—")</td>
+                        <td class="small text-muted">@(d.Duration?.ToString(@"m\:ss") ?? "—")</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <a href="/Deployments/Console?id=@d.Id" class="btn btn-outline-primary" title="Live Console">
+                                    <i class="bi bi-terminal"></i>
+                                </a>
+                                @if (d.Status == IISManager.Domain.Enums.DeploymentStatus.Succeeded)
+                                {
+                                    <form method="post" asp-page-handler="Rollback"
+                                          onsubmit="return confirm('Roll back deployment #@d.Id?')">
+                                        <input type="hidden" name="deploymentId" value="@d.Id" />
+                                        <button class="btn btn-outline-warning" title="Rollback">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+                @if (!Model.Deployments.Items.Any())
+                {
+                    <tr><td colspan="10" class="text-center text-muted py-4">No deployments found.</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    @if (Model.Deployments.TotalPages > 1)
+    {
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <span class="text-muted small">@Model.Deployments.TotalCount total</span>
+            <nav>
+                <ul class="pagination pagination-sm mb-0">
+                    @for (int p = 1; p <= Model.Deployments.TotalPages; p++)
+                    {
+                        <li class="page-item @(p == Model.Deployments.Page ? "active" : "")">
+                            <a class="page-link" href="?page=@p&status=@Model.StatusFilter">@p</a>
+                        </li>
+                    }
+                </ul>
+            </nav>
+        </div>
+    }
+</div>

@@ -29,17 +29,35 @@ public static class XmlConfigHelper
         try
         {
             var doc         = XDocument.Parse(xml);
-            var appSettings = doc.Descendants("appSettings").FirstOrDefault();
-            if (appSettings == null) return xml;
-
             bool found = false;
-            foreach (var el in appSettings.Nodes().OfType<XElement>().Where(n => n.Name.LocalName == "add"))
+
+            // 1) appSettings: <add key="..." value="..." />
+            var appSettings = doc.Descendants("appSettings").FirstOrDefault();
+            if (appSettings != null)
             {
-                var k = el.Attribute("key")?.Value;
-                if (k != null && string.Equals(k, key, StringComparison.OrdinalIgnoreCase))
+                foreach (var el in appSettings.Nodes().OfType<XElement>().Where(n => n.Name.LocalName == "add"))
                 {
-                    el.SetAttributeValue("value", value);
-                    found = true;
+                    var k = el.Attribute("key")?.Value;
+                    if (k != null && string.Equals(k, key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        el.SetAttributeValue("value", value);
+                        found = true;
+                    }
+                }
+            }
+
+            // 2) connectionStrings: <add name="..." connectionString="..." />
+            var connectionStrings = doc.Descendants("connectionStrings").FirstOrDefault();
+            if (connectionStrings != null)
+            {
+                foreach (var el in connectionStrings.Nodes().OfType<XElement>().Where(n => n.Name.LocalName == "add"))
+                {
+                    var name = el.Attribute("name")?.Value;
+                    if (name != null && string.Equals(name, key, StringComparison.OrdinalIgnoreCase))
+                    {
+                        el.SetAttributeValue("connectionString", value);
+                        found = true;
+                    }
                 }
             }
 

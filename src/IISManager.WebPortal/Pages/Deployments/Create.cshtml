@@ -1,0 +1,533 @@
+@page
+@model IISManager.WebPortal.Pages.Deployments.CreateDeploymentModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "New Deployment";
+}
+
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Deployments">Deployments</a></li>
+            <li class="breadcrumb-item active">New Deployment</li>
+        </ol>
+    </nav>
+    <h1 class="h3"><i class="bi bi-rocket me-2 text-primary"></i>New Deployment</h1>
+</div>
+
+<form method="post" id="deployForm">
+    <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:none" id="validationSummary"></div>
+
+    <div class="row g-4">
+        <!-- Left column: deployment config -->
+        <div class="col-lg-7">
+
+            <!-- Application & Package -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white fw-semibold">
+                    <i class="bi bi-box me-2 text-primary"></i>Application &amp; Package
+                </div>
+                <div class="card-body">
+
+                    <!-- Application row with + button -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Application *</label>
+                        <div class="input-group">
+                            <select id="appSelect" name="Input.ApplicationId" class="form-select" required>
+                                <option value="">— Select application —</option>
+                                @foreach (var app in Model.Applications)
+                                {
+                                    <option value="@app.Id"
+                                            data-site="@app.DefaultWebsiteName"
+                                            data-pool="@app.DefaultAppPoolName"
+                                            data-path="@app.PhysicalPath">
+                                        @app.Name
+                                    </option>
+                                }
+                            </select>
+                            <button type="button" class="btn btn-outline-success"
+                                    data-bs-toggle="modal" data-bs-target="#newAppModal"
+                                    title="Create new application">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Package row with + button -->
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Package *</label>
+                        <div class="input-group">
+                            <select id="pkgSelect" name="Input.PackageId" class="form-select" required disabled>
+                                <option value="">— Select application first —</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-success" id="openUploadPkgBtn"
+                                    title="Upload new package">
+                                <i class="bi bi-upload"></i>
+                            </button>
+                        </div>
+                        <div class="form-text">Packages are filtered by the selected application.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Version" class="form-label fw-semibold">Version *</label>
+                        <input asp-for="Input.Version" id="versionInput" class="form-control" placeholder="e.g. 1.4.2" />
+                        <span asp-validation-for="Input.Version" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Deployment Mode *</label>
+                        <div class="d-flex gap-4 mt-1">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="Input.Mode" id="modeSeq"
+                                       value="Sequential" checked />
+                                <label class="form-check-label" for="modeSeq">
+                                    <strong>Sequential</strong>
+                                    <span class="d-block text-muted small">One server at a time</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="Input.Mode" id="modePar"
+                                       value="Parallel" />
+                                <label class="form-check-label" for="modePar">
+                                    <strong>Parallel</strong>
+                                    <span class="d-block text-muted small">All servers simultaneously</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-1">
+                        <label asp-for="Input.Notes" class="form-label fw-semibold">Notes</label>
+                        <textarea asp-for="Input.Notes" class="form-control" rows="2"
+                                  placeholder="Optional release notes or change description"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Deployment Targets -->
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <span class="fw-semibold"><i class="bi bi-hdd-network me-2 text-primary"></i>Deployment Targets</span>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="addTargetBtn">
+                        <i class="bi bi-plus-lg me-1"></i>Add Target
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="targetsContainer"></div>
+                    <div id="noTargetsMsg" class="text-center text-muted py-4 small d-none">
+                        No targets added yet. Click "Add Target" to begin.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right column: help -->
+        <div class="col-lg-5">
+            <div class="card border-0 shadow-sm bg-light sticky-top" style="top:80px">
+                <div class="card-body">
+                    <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>How it works</h6>
+                    <ol class="small text-muted mb-0">
+                        <li>Select the application and the package to deploy</li>
+                        <li>Confirm or override the version string</li>
+                        <li>Add one or more deployment targets (server + IIS site)</li>
+                        <li>Click <strong>Start Deployment</strong> — you'll be redirected to the live console</li>
+                    </ol>
+                    <hr class="my-3" />
+                    <p class="small text-muted mb-1">
+                        <i class="bi bi-lightning me-1"></i><strong>Sequential</strong> — each server waits for the previous to finish.
+                        Safer for rolling deploys.
+                    </p>
+                    <p class="small text-muted mb-0">
+                        <i class="bi bi-grid me-1"></i><strong>Parallel</strong> — all servers deploy simultaneously.
+                        Faster but all-or-nothing.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4 d-flex gap-2">
+        <button type="submit" class="btn btn-primary px-4">
+            <i class="bi bi-rocket-takeoff me-1"></i>Start Deployment
+        </button>
+        <a href="/Deployments" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+</form>
+
+<!-- ── New Application Modal ─────────────────────────────────────────── -->
+<div class="modal fade" id="newAppModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-plus-circle me-2 text-success"></i>New Application</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="appModalError" class="alert alert-danger d-none small"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Name *</label>
+                    <input id="newAppName" class="form-control" placeholder="e.g. MyWebApp" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Description</label>
+                    <textarea id="newAppDesc" class="form-control" rows="2"
+                              placeholder="Optional description"></textarea>
+                </div>
+                <hr />
+                <p class="small text-muted mb-3">
+                    <i class="bi bi-lightbulb me-1"></i>Default values will auto-fill deployment targets when this application is selected.
+                </p>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Default Website Name</label>
+                    <input id="newAppSite" class="form-control form-control-sm"
+                           placeholder="e.g. Default Web Site" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label small fw-semibold">Default App Pool</label>
+                    <input id="newAppPool" class="form-control form-control-sm"
+                           placeholder="e.g. DefaultAppPool" />
+                </div>
+                <div class="mb-0">
+                    <label class="form-label small fw-semibold">Default Physical Path</label>
+                    <input id="newAppPath" class="form-control form-control-sm"
+                           placeholder="e.g. C:\inetpub\wwwroot\myapp" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="saveAppBtn">
+                    <i class="bi bi-plus-lg me-1"></i>Create Application
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Upload Package Modal ───────────────────────────────────────────── -->
+<div class="modal fade" id="uploadPkgModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-upload me-2 text-success"></i>Upload Package</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="pkgModalError" class="alert alert-danger d-none small"></div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Application</label>
+                    <input id="pkgModalAppName" class="form-control" readonly />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Version *</label>
+                    <input id="newPkgVersion" class="form-control" placeholder="e.g. 1.4.2" />
+                </div>
+                <div class="mb-0">
+                    <label class="form-label fw-semibold">Package File (.zip) *</label>
+                    <input id="newPkgFile" class="form-control" type="file" accept=".zip" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="uploadPkgBtn">
+                    <i class="bi bi-upload me-1"></i>Upload Package
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const servers = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+        Model.Servers.Select(s => new { id = s.Id, name = s.Name, isOnline = s.IsOnline })));
+
+    // ── Anti-forgery token ──────────────────────────────────────────────
+    function getToken() {
+        return document.querySelector('#deployForm input[name="__RequestVerificationToken"]')?.value ?? '';
+    }
+
+    // ── Target rows ─────────────────────────────────────────────────────
+    let targetIndex = 0;
+
+    function buildTargetRow(idx) {
+        const serverOptions = servers.map(s =>
+            `<option value="${s.id}">${s.name}${s.isOnline ? '' : ' (offline)'}</option>`
+        ).join('');
+
+        return `
+        <div class="target-row border-top p-3" id="target-${idx}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span class="target-label fw-semibold small text-muted text-uppercase">Target #${idx + 1}</span>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-target" data-idx="${idx}">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="row g-2">
+                <div class="col-sm-6">
+                    <label class="form-label small fw-semibold">Server *</label>
+                    <select name="Input.Targets[${idx}].ServerId" class="form-select form-select-sm"
+                            data-idx="${idx}" required>
+                        <option value="">— Select server —</option>
+                        ${serverOptions}
+                    </select>
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small fw-semibold d-flex justify-content-between">
+                        Website Name *
+                        <button type="button" class="btn btn-link btn-sm p-0 load-sites"
+                                data-idx="${idx}" style="font-size:.75rem">
+                            <i class="bi bi-arrow-clockwise"></i> Load from server
+                        </button>
+                    </label>
+                    <input name="Input.Targets[${idx}].WebsiteName"
+                           class="form-control form-control-sm website-input-${idx}"
+                           placeholder="e.g. Default Web Site" required />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small fw-semibold">App Pool *</label>
+                    <input name="Input.Targets[${idx}].AppPoolName"
+                           class="form-control form-control-sm apppool-input-${idx}"
+                           placeholder="e.g. DefaultAppPool" required />
+                </div>
+                <div class="col-sm-6">
+                    <label class="form-label small fw-semibold">Physical Path *</label>
+                    <input name="Input.Targets[${idx}].PhysicalPath"
+                           class="form-control form-control-sm path-input-${idx}"
+                           placeholder="e.g. C:\inetpub\wwwroot\myapp" required />
+                </div>
+                <div class="col-12 site-suggestions-${idx}"></div>
+            </div>
+        </div>`;
+    }
+
+    function addTarget() {
+        const idx = targetIndex++;
+        document.getElementById('targetsContainer').insertAdjacentHTML('beforeend', buildTargetRow(idx));
+        document.getElementById('noTargetsMsg')?.classList.add('d-none');
+        reindexTargets();
+    }
+
+    function reindexTargets() {
+        document.querySelectorAll('.target-row').forEach((row, i) => {
+            const label = row.querySelector('.target-label');
+            if (label) label.textContent = `Target #${i + 1}`;
+        });
+    }
+
+    // Remove target
+    document.getElementById('targetsContainer').addEventListener('click', function (e) {
+        const btn = e.target.closest('.remove-target');
+        if (!btn) return;
+        document.getElementById(`target-${btn.dataset.idx}`)?.remove();
+        reindexTargets();
+        if (!document.querySelector('.target-row'))
+            document.getElementById('noTargetsMsg')?.classList.remove('d-none');
+    });
+
+    // Load IIS sites
+    document.getElementById('targetsContainer').addEventListener('click', async function (e) {
+        const btn = e.target.closest('.load-sites');
+        if (!btn) return;
+        const idx = btn.dataset.idx;
+        const serverId = document.querySelector(`[name="Input.Targets[${idx}].ServerId"]`)?.value;
+        if (!serverId) { alert('Select a server first.'); return; }
+
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+        btn.disabled = true;
+        try {
+            const sites = await fetch(`/Deployments/Create?handler=Sites&serverId=${serverId}`,
+                { headers: { Accept: 'application/json' } }).then(r => r.json());
+
+            const div = document.querySelector(`.site-suggestions-${idx}`);
+            if (!sites.length) {
+                div.innerHTML = '<p class="small text-muted mt-1 mb-0">No cached IIS sites — enter manually.</p>';
+                return;
+            }
+            div.innerHTML = `<div class="mt-2"><span class="small text-muted me-1">Quick-fill:</span>` +
+                sites.map(s =>
+                    `<button type="button" class="btn btn-sm btn-outline-secondary me-1 mb-1 pick-site"
+                             data-idx="${idx}" data-name="${s.name}" data-pool="${s.appPool}" data-path="${s.physicalPath}">
+                         ${s.name}
+                     </button>`).join('') + `</div>`;
+        } catch { alert('Failed to load sites.'); }
+        finally { btn.innerHTML = orig; btn.disabled = false; }
+    });
+
+    // Pick suggested site
+    document.getElementById('targetsContainer').addEventListener('click', function (e) {
+        const btn = e.target.closest('.pick-site');
+        if (!btn) return;
+        const idx = btn.dataset.idx;
+        document.querySelector(`[name="Input.Targets[${idx}].WebsiteName"]`).value = btn.dataset.name;
+        document.querySelector(`[name="Input.Targets[${idx}].AppPoolName"]`).value = btn.dataset.pool;
+        document.querySelector(`[name="Input.Targets[${idx}].PhysicalPath"]`).value = btn.dataset.path;
+    });
+
+    // ── Application dropdown ─────────────────────────────────────────────
+    document.getElementById('appSelect').addEventListener('change', async function () {
+        const appId = this.value;
+        const pkgSelect = document.getElementById('pkgSelect');
+        pkgSelect.innerHTML = '<option value="">Loading…</option>';
+        pkgSelect.disabled = true;
+
+        // Pre-fill first target defaults
+        const opt = this.options[this.selectedIndex];
+        prefillFirstTarget(opt.dataset.site, opt.dataset.pool, opt.dataset.path);
+
+        if (!appId) {
+            pkgSelect.innerHTML = '<option value="">— Select application first —</option>';
+            return;
+        }
+        try {
+            const pkgs = await fetch(`/Deployments/Create?handler=Packages&applicationId=${appId}`,
+                { headers: { Accept: 'application/json' } }).then(r => r.json());
+            if (!pkgs.length) {
+                pkgSelect.innerHTML = '<option value="">No packages — upload one with the + button</option>';
+                return;
+            }
+            pkgSelect.innerHTML = '<option value="">— Select package —</option>' +
+                pkgs.map(p => `<option value="${p.id}" data-version="${p.version}">${p.version} — ${p.fileName}</option>`).join('');
+            pkgSelect.disabled = false;
+        } catch {
+            pkgSelect.innerHTML = '<option value="">Failed to load packages</option>';
+        }
+    });
+
+    function prefillFirstTarget(site, pool, path) {
+        const s = document.querySelector('[name="Input.Targets[0].WebsiteName"]');
+        const p = document.querySelector('[name="Input.Targets[0].AppPoolName"]');
+        const x = document.querySelector('[name="Input.Targets[0].PhysicalPath"]');
+        if (s && !s.value) s.value = site || '';
+        if (p && !p.value) p.value = pool || '';
+        if (x && !x.value) x.value = path || '';
+    }
+
+    // Package → auto-fill version
+    document.getElementById('pkgSelect').addEventListener('change', function () {
+        const v = this.options[this.selectedIndex]?.dataset?.version;
+        if (v) document.getElementById('versionInput').value = v;
+    });
+
+    // ── New Application modal ────────────────────────────────────────────
+    document.getElementById('saveAppBtn').addEventListener('click', async () => {
+        const name = document.getElementById('newAppName').value.trim();
+        if (!name) { showError('appModalError', 'Application name is required.'); return; }
+
+        const btn = document.getElementById('saveAppBtn');
+        btn.disabled = true;
+
+        const fd = new FormData();
+        fd.append('name', name);
+        fd.append('description', document.getElementById('newAppDesc').value);
+        fd.append('defaultWebsiteName', document.getElementById('newAppSite').value);
+        fd.append('defaultAppPoolName', document.getElementById('newAppPool').value);
+        fd.append('physicalPath', document.getElementById('newAppPath').value);
+        fd.append('__RequestVerificationToken', getToken());
+
+        try {
+            const resp = await fetch('/Deployments/Create?handler=CreateApplication',
+                { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (!resp.ok) { showError('appModalError', data.error || 'Failed to create application.'); return; }
+
+            // Add to dropdown and select
+            const appSelect = document.getElementById('appSelect');
+            const opt = new Option(data.name, data.id, true, true);
+            opt.dataset.site = data.site || '';
+            opt.dataset.pool = data.pool || '';
+            opt.dataset.path = data.path || '';
+            appSelect.add(opt);
+            appSelect.value = data.id;
+            appSelect.dispatchEvent(new Event('change'));
+
+            bootstrap.Modal.getInstance(document.getElementById('newAppModal')).hide();
+            ['newAppName', 'newAppDesc', 'newAppSite', 'newAppPool', 'newAppPath']
+                .forEach(id => document.getElementById(id).value = '');
+            document.getElementById('appModalError').classList.add('d-none');
+        } catch {
+            showError('appModalError', 'Network error. Please try again.');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+
+    // Clear modal errors on open
+    document.getElementById('newAppModal').addEventListener('show.bs.modal', () => {
+        document.getElementById('appModalError').classList.add('d-none');
+    });
+
+    // ── Upload Package modal ─────────────────────────────────────────────
+    document.getElementById('openUploadPkgBtn').addEventListener('click', () => {
+        const appSelect = document.getElementById('appSelect');
+        if (!appSelect.value) { alert('Select an application first.'); return; }
+        document.getElementById('pkgModalAppName').value =
+            appSelect.options[appSelect.selectedIndex].text;
+        document.getElementById('pkgModalError').classList.add('d-none');
+        new bootstrap.Modal(document.getElementById('uploadPkgModal')).show();
+    });
+
+    document.getElementById('uploadPkgBtn').addEventListener('click', async () => {
+        const version = document.getElementById('newPkgVersion').value.trim();
+        const file = document.getElementById('newPkgFile').files[0];
+        const appId = document.getElementById('appSelect').value;
+
+        if (!version) { showError('pkgModalError', 'Version is required.'); return; }
+        if (!file) { showError('pkgModalError', 'Package file is required.'); return; }
+
+        const btn = document.getElementById('uploadPkgBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Uploading…';
+
+        const fd = new FormData();
+        fd.append('packageFile', file);
+        fd.append('version', version);
+        fd.append('applicationId', appId);
+        fd.append('__RequestVerificationToken', getToken());
+
+        try {
+            const resp = await fetch('/Deployments/Create?handler=UploadPackage',
+                { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (!resp.ok) { showError('pkgModalError', data.error || 'Upload failed.'); return; }
+
+            // Add to dropdown and select
+            const pkgSelect = document.getElementById('pkgSelect');
+            const opt = new Option(`${data.version} — ${data.fileName}`, data.id, true, true);
+            opt.dataset.version = data.version;
+            pkgSelect.disabled = false;
+            pkgSelect.add(opt);
+            pkgSelect.value = data.id;
+            pkgSelect.dispatchEvent(new Event('change'));
+
+            bootstrap.Modal.getInstance(document.getElementById('uploadPkgModal')).hide();
+            document.getElementById('newPkgVersion').value = '';
+            document.getElementById('newPkgFile').value = '';
+            document.getElementById('pkgModalError').classList.add('d-none');
+        } catch {
+            showError('pkgModalError', 'Network error. Please try again.');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-upload me-1"></i>Upload Package';
+        }
+    });
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+    function showError(id, msg) {
+        const el = document.getElementById(id);
+        el.textContent = msg;
+        el.classList.remove('d-none');
+    }
+
+    // Validation summary visibility
+    const summary = document.getElementById('validationSummary');
+    if (summary?.querySelectorAll('li').length > 0) summary.style.display = '';
+
+    // Add first target on load
+    addTarget();
+    document.getElementById('addTargetBtn').addEventListener('click', addTarget);
+})();
+</script>
+}

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Text.Json;
+using System.Xml;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -22,6 +23,7 @@ public class MainViewModel : BaseViewModel
     private readonly AppSettingsService _appSettingsService;
 
     private Codebase? _selectedCodebase;
+    private string _codebaseSearchText = string.Empty;
     private string _publishOutputFolder = string.Empty;
     private string _logSearchText = string.Empty;
     private string _editorSearchText = string.Empty;
@@ -45,13 +47,23 @@ public class MainViewModel : BaseViewModel
     private string _globalValue = string.Empty;
     private readonly Dictionary<string, string> _fileContents = new(StringComparer.OrdinalIgnoreCase);
     private readonly ICollectionView _logEntriesView;
+    private readonly ICollectionView _codebasesView;
+    private readonly ICollectionView _settingsCodebasesView;
     private Codebase? _selectedSettingsCodebase;
+    private string _settingsCodebaseSearchText = string.Empty;
     private string _settingsPublishOutputRoot = string.Empty;
     private string _settingsPatchOutputRoot = string.Empty;
     private bool _isDarkMode;
+    private bool _isCodebasesExpanded = true;
+
+    // ── Transfer tab sub-viewmodel ─────────────────────────────────────────────
+    public TransferViewModel Transfer { get; }
 
     // ── Deploy tab sub-viewmodel ────────────────────────────────────────────────
     public DeployViewModel Deploy { get; }
+
+    // ── VB Publisher tab sub-viewmodel ─────────────────────────────────────────
+    public VbPublisherViewModel VbPublisher { get; }
 
     // ── Collections ────────────────────────────────────────────────────────────
     public ObservableCollection<Codebase>      Codebases   { get; } = [];
@@ -73,6 +85,18 @@ public class MainViewModel : BaseViewModel
                 _ = LoadProjectsAsync();
         }
     }
+
+    public string CodebaseSearchText
+    {
+        get => _codebaseSearchText;
+        set
+        {
+            if (SetField(ref _codebaseSearchText, value))
+                _codebasesView.Refresh();
+        }
+    }
+
+    public ICollectionView FilteredCodebases => _codebasesView;
 
     public string PublishOutputFolder
     {
@@ -211,6 +235,18 @@ public class MainViewModel : BaseViewModel
         }
     }
 
+    public string SettingsCodebaseSearchText
+    {
+        get => _settingsCodebaseSearchText;
+        set
+        {
+            if (SetField(ref _settingsCodebaseSearchText, value))
+                _settingsCodebasesView.Refresh();
+        }
+    }
+
+    public ICollectionView FilteredSettingsCodebases => _settingsCodebasesView;
+
     public string SettingsPublishOutputRoot
     {
         get => _settingsPublishOutputRoot;
@@ -231,6 +267,12 @@ public class MainViewModel : BaseViewModel
             if (SetField(ref _isDarkMode, value) && Application.Current is App app)
                 app.ApplyTheme(value);
         }
+    }
+
+    public bool IsCodebasesExpanded
+    {
+        get => _isCodebasesExpanded;
+        set => SetField(ref _isCodebasesExpanded, value);
     }
 
     // ── AppSettings tab properties ─────────────────────────────────────────────
@@ -357,12 +399,14 @@ public class MainViewModel : BaseViewModel
     public ICommand SaveAllModifiedCommand   { get; }
     public ICommand AddSettingsCodebaseCommand { get; }
     public ICommand RemoveSettingsCodebaseCommand { get; }
+    public ICommand RemoveAllSettingsCodebasesCommand { get; }
     public ICommand BrowseSettingsCodebasePathCommand { get; }
     public ICommand AddMultipleCodebasesCommand { get; }
     public ICommand BrowseSettingsPublishOutputCommand { get; }
     public ICommand BrowseSettingsPatchOutputCommand { get; }
     public ICommand SaveSettingsCommand { get; }
-    public ICommand ValidateSelectedJsonCommand { get; }
+    public ICommand ValidateSelectedJsonCommand   { get; }
+    public ICommand ToggleCodebasesCommand        { get; }
 
     // ── Constructor ─────────────────────────────────────────────────────────────
     public MainViewModel()
@@ -373,24 +417,6 @@ public class MainViewModel : BaseViewModel
         _comparer            = new FileCompareService();
         _copier              = new FileCopyService();
         _appSettingsService  = new AppSettingsService();
-
-        Deploy = new DeployViewModel(
-            () => Projects.Where(p => p.IsSelected).ToList(),
-            () => PublishOutputFolder,
-            AppendLog);
-        _logEntriesView      = CollectionViewSource.GetDefaultView(LogEntries);
-        _logEntriesView.Filter = item =>
-            item is LogEntry entry &&
-            (string.IsNullOrWhiteSpace(_logSearchText) ||
-             entry.DisplayText.Contains(_logSearchText, StringComparison.OrdinalIgnoreCase));
-
-        _publishOutputFolder = _config.Settings.PublishOutputRoot;
-        _settingsPublishOutputRoot = _config.Settings.PublishOutputRoot;
-        _settingsPatchOutputRoot = _config.Settings.PatchOutputRoot;
-        _isDarkMode = _config.Settings.IsDarkMode;
-
-        if (Application.Current is App app)
-            app.ApplyTheme(_isDarkMode);
 
         FilterOptions = [
             new FilterOption(FileFilterMode.All,          "All Files"),
@@ -405,6 +431,50 @@ public class MainViewModel : BaseViewModel
         ];
         _selectedCompareModeOption = CompareModeOptions[0];
         _patchName = $"Patch_{DateTime.Now:yyyyMMdd_HHmm}";
+
+        Transfer    = new TransferViewModel();
+        VbPublisher = new VbPublisherViewModel(
+            AppendLog,
+            _config.Settings.GitRepositories,
+            SaveGitRepositoriesAsync,
+            publishPath =>
+            {
+                SingleCompareFolder = publishPath;
+                SelectedCompareModeOption = CompareModeOptions.First(
+                    o => o.Mode == CompareMode.SingleFolder);
+            });
+
+        Deploy = new DeployViewModel(
+            () => Projects.Where(p => p.IsSelected).ToList(),
+            () => PublishOutputFolder,
+            AppendLog);
+        _logEntriesView      = CollectionViewSource.GetDefaultView(LogEntries);
+        _logEntriesView.Filter = item =>
+            item is LogEntry entry &&
+            (string.IsNullOrWhiteSpace(_logSearchText) ||
+             entry.DisplayText.Contains(_logSearchText, StringComparison.OrdinalIgnoreCase));
+
+        _codebasesView = CollectionViewSource.GetDefaultView(Codebases);
+        _codebasesView.Filter = item =>
+            item is Codebase cb &&
+            (string.IsNullOrWhiteSpace(_codebaseSearchText)
+             || cb.Name.Contains(_codebaseSearchText, StringComparison.OrdinalIgnoreCase)
+             || cb.Path.Contains(_codebaseSearchText, StringComparison.OrdinalIgnoreCase));
+
+        _settingsCodebasesView = CollectionViewSource.GetDefaultView(SettingsCodebases);
+        _settingsCodebasesView.Filter = item =>
+            item is Codebase cb &&
+            (string.IsNullOrWhiteSpace(_settingsCodebaseSearchText)
+             || cb.Name.Contains(_settingsCodebaseSearchText, StringComparison.OrdinalIgnoreCase)
+             || cb.Path.Contains(_settingsCodebaseSearchText, StringComparison.OrdinalIgnoreCase));
+
+        _publishOutputFolder = _config.Settings.PublishOutputRoot;
+        _settingsPublishOutputRoot = _config.Settings.PublishOutputRoot;
+        _settingsPatchOutputRoot = _config.Settings.PatchOutputRoot;
+        _isDarkMode = _config.Settings.IsDarkMode;
+
+        if (Application.Current is App app)
+            app.ApplyTheme(_isDarkMode);
 
         FileChanges.CollectionChanged += (_, _) =>
         {
@@ -496,6 +566,9 @@ public class MainViewModel : BaseViewModel
         RemoveSettingsCodebaseCommand = new RelayCommand(
             RemoveSelectedSettingsCodebase,
             () => !IsBusy && SelectedSettingsCodebase != null);
+        RemoveAllSettingsCodebasesCommand = new RelayCommand(
+            RemoveAllSettingsCodebases,
+            () => !IsBusy && SettingsCodebases.Count > 0);
         BrowseSettingsCodebasePathCommand = new RelayCommand(
             BrowseSelectedSettingsCodebasePath,
             () => !IsBusy && SelectedSettingsCodebase != null);
@@ -528,9 +601,13 @@ public class MainViewModel : BaseViewModel
         UpdateEditorLineNumbers();
 
         ValidateSelectedJsonCommand = new RelayCommand(
-            ValidateSelectedJson,
+            ValidateSelectedConfig,
             () => !IsBusy && SelectedConfigFile != null &&
-                  string.Equals(SelectedConfigFile.FileType, "JSON", StringComparison.OrdinalIgnoreCase));
+                  (string.Equals(SelectedConfigFile.FileType, "JSON", StringComparison.OrdinalIgnoreCase)
+                   || string.Equals(SelectedConfigFile.FileType, "XML", StringComparison.OrdinalIgnoreCase)));
+
+        ToggleCodebasesCommand = new RelayCommand(
+            () => IsCodebasesExpanded = !IsCodebasesExpanded);
     }
 
     // ── Private methods ─────────────────────────────────────────────────────────
@@ -828,6 +905,22 @@ public class MainViewModel : BaseViewModel
             SelectedSettingsCodebase = SettingsCodebases[Math.Min(index, SettingsCodebases.Count - 1)];
     }
 
+    private void RemoveAllSettingsCodebases()
+    {
+        if (SettingsCodebases.Count == 0) return;
+
+        var result = MessageBox.Show(
+            $"Remove all {SettingsCodebases.Count} codebase(s)? This cannot be undone until you save settings.",
+            "Remove All Codebases",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes) return;
+
+        SettingsCodebases.Clear();
+        SelectedSettingsCodebase = null;
+    }
+
     private void BrowseSelectedSettingsCodebasePath()
     {
         if (SelectedSettingsCodebase == null) return;
@@ -892,10 +985,11 @@ public class MainViewModel : BaseViewModel
 
         var settings = new AppSettings
         {
-            Codebases = cleaned,
+            Codebases         = cleaned,
             PublishOutputRoot = SettingsPublishOutputRoot.Trim(),
-            PatchOutputRoot = SettingsPatchOutputRoot.Trim(),
-            IsDarkMode = IsDarkMode
+            PatchOutputRoot   = SettingsPatchOutputRoot.Trim(),
+            IsDarkMode        = IsDarkMode,
+            GitRepositories   = _config.Settings.GitRepositories
         };
 
         IsBusy = true;
@@ -922,6 +1016,32 @@ public class MainViewModel : BaseViewModel
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    private async Task SaveGitRepositoriesAsync(IEnumerable<Models.Git.GitRepositoryConfig> repos)
+    {
+        var cleaned = repos
+            .Where(r => !string.IsNullOrWhiteSpace(r.Name) && !string.IsNullOrWhiteSpace(r.LocalPath))
+            .ToList();
+
+        var settings = new Models.AppSettings
+        {
+            Codebases         = _config.Settings.Codebases,
+            PublishOutputRoot = _config.Settings.PublishOutputRoot,
+            PatchOutputRoot   = _config.Settings.PatchOutputRoot,
+            IsDarkMode        = _config.Settings.IsDarkMode,
+            GitRepositories   = cleaned
+        };
+
+        try
+        {
+            await _config.SaveSettingsAsync(settings);
+            AppendLog($"Git repositories saved ({cleaned.Count}).");
+        }
+        catch (Exception ex)
+        {
+            AppendLog($"ERROR saving git repositories: {ex.Message}");
         }
     }
 
@@ -1036,7 +1156,7 @@ public class MainViewModel : BaseViewModel
 
         try
         {
-            await File.WriteAllTextAsync(file.FilePath, content,
+            await ElevatedFileWriter.WriteAllTextAsync(file.FilePath, content,
                 new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
             file.IsModified = false;
@@ -1081,6 +1201,7 @@ public class MainViewModel : BaseViewModel
 
         IsBusy = true;
         int changedFiles = 0;
+        int skippedFiles = 0;
         AppendLog($"Applying '{_globalKey}' = '{_globalValue}' to {targets.Count} selected file(s)…");
 
         try
@@ -1102,7 +1223,11 @@ public class MainViewModel : BaseViewModel
                 }
 
                 var updated = ApplyKeyChange(file, content, _globalKey, _globalValue);
-                if (updated == content) continue;
+                if (updated == content)
+                {
+                    skippedFiles++;
+                    continue;
+                }
 
                 _fileContents[file.FilePath] = updated;
                 file.IsModified = true;
@@ -1118,14 +1243,7 @@ public class MainViewModel : BaseViewModel
                 }
             }
 
-            if (changedFiles > 0)
-                AppendLog($"'{_globalKey}' updated in {changedFiles} file(s). Use Save File / Save All to persist.");
-            else
-            {
-                AppendLog($"Key '{_globalKey}' not found in any selected file.");
-                MessageBox.Show($"Key '{_globalKey}' was not found in any of the {targets.Count} selected file(s).",
-                    "No Matches", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+            AppendLog($"Global change complete. Updated: {changedFiles}, skipped (key not found): {skippedFiles}. Use Save File / Save All to persist.");
         }
         finally
         {
@@ -1163,7 +1281,7 @@ public class MainViewModel : BaseViewModel
 
                 try
                 {
-                    await File.WriteAllTextAsync(file.FilePath, content,
+                    await ElevatedFileWriter.WriteAllTextAsync(file.FilePath, content,
                         new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
                     file.IsModified = false;
                     saved++;
@@ -1188,7 +1306,7 @@ public class MainViewModel : BaseViewModel
         }
     }
 
-    private void ValidateSelectedJson()
+    private void ValidateSelectedConfig()
     {
         if (SelectedConfigFile == null)
         {
@@ -1196,22 +1314,27 @@ public class MainViewModel : BaseViewModel
             return;
         }
 
-        if (!string.Equals(SelectedConfigFile.FileType, "JSON", StringComparison.OrdinalIgnoreCase))
-        {
-            AppendLog($"WARNING: {SelectedConfigFile.FileName} is not a JSON file.");
-            return;
-        }
-
         var content = _editorContent;
         if (string.IsNullOrWhiteSpace(content) && _fileContents.TryGetValue(SelectedConfigFile.FilePath, out var cached))
             content = cached;
 
-        var issues = GetJsonValidationIssues(content);
+        var isJson = string.Equals(SelectedConfigFile.FileType, "JSON", StringComparison.OrdinalIgnoreCase);
+        var isXml = string.Equals(SelectedConfigFile.FileType, "XML", StringComparison.OrdinalIgnoreCase);
+
+        if (!isJson && !isXml)
+        {
+            AppendLog($"WARNING: {SelectedConfigFile.FileName} is not a supported config type.");
+            return;
+        }
+
+        var issues = isJson ? GetJsonValidationIssues(content) : GetXmlValidationIssues(content);
+        var label = isJson ? "JSON" : "XML";
+
         if (issues.Count == 0)
         {
             SetValidationErrors([]);
-            AppendLog($"JSON validation passed: {SelectedConfigFile.FileName}");
-            MessageBox.Show($"No JSON syntax errors found in {SelectedConfigFile.FileName}.", "JSON Validation",
+            AppendLog($"{label} validation passed: {SelectedConfigFile.FileName}");
+            MessageBox.Show($"No {label} syntax errors found in {SelectedConfigFile.FileName}.", $"{label} Validation",
                 MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -1220,11 +1343,11 @@ public class MainViewModel : BaseViewModel
         SetValidationErrors(lines);
 
         foreach (var issue in issues)
-            AppendLog($"ERROR: JSON validation failed in {SelectedConfigFile.FileName} at line {issue.Line}, column {issue.Column}: {issue.Message}");
+            AppendLog($"ERROR: {label} validation failed in {SelectedConfigFile.FileName} at line {issue.Line}, column {issue.Column}: {issue.Message}");
 
         MessageBox.Show(
-            $"Found {issues.Count} JSON issue(s) across {lines.Count} line(s).\nError lines are highlighted in light red in the editor gutter.",
-            "JSON Validation Errors",
+            $"Found {issues.Count} {label} issue(s) across {lines.Count} line(s).\nError lines are highlighted in light red in the editor gutter.",
+            $"{label} Validation Errors",
             MessageBoxButton.OK,
             MessageBoxImage.Error);
     }
@@ -1313,6 +1436,35 @@ public class MainViewModel : BaseViewModel
             .OrderBy(x => x.Line)
             .ThenBy(x => x.Column)
             .ToList();
+    }
+
+    private static List<JsonValidationIssue> GetXmlValidationIssues(string content)
+    {
+        var issues = new List<JsonValidationIssue>();
+
+        try
+        {
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Ignore,
+                IgnoreComments = false,
+                IgnoreWhitespace = false
+            };
+
+            using var sr = new StringReader(content);
+            using var reader = XmlReader.Create(sr, settings);
+            while (reader.Read()) { }
+
+            return issues;
+        }
+        catch (XmlException ex)
+        {
+            issues.Add(new JsonValidationIssue(
+                Math.Max(1, ex.LineNumber),
+                Math.Max(1, ex.LinePosition),
+                ex.Message));
+            return issues;
+        }
     }
 
     private static string StripJsonLineComment(string line)

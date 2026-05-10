@@ -10,6 +10,11 @@ public class ProjectItem : INotifyPropertyChanged
     public string Name { get; set; } = string.Empty;
     public string Path { get; set; } = string.Empty;
 
+    /// <summary>
+    /// True when this item represents a pre-published output folder rather than a source .csproj.
+    /// </summary>
+    public bool IsPublishedFolder { get; set; }
+
     public bool IsSelected
     {
         get => _isSelected;

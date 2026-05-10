@@ -1,0 +1,97 @@
+@page
+@model IISManager.WebPortal.Pages.Deployments.DeploymentConsoleModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = $"Deployment #{Model.Deployment?.Id} Console";
+}
+
+@if (Model.Deployment is null)
+{
+    <div class="alert alert-danger">Deployment not found.</div>
+    return;
+}
+
+<div class="mb-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Deployments">Deployments</a></li>
+            <li class="breadcrumb-item active">Console #@Model.Deployment.Id</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <h6 class="card-title">Deployment Info</h6>
+                <dl class="row mb-0 small">
+                    <dt class="col-5">ID</dt><dd class="col-7">#@Model.Deployment.Id</dd>
+                    <dt class="col-5">Application</dt><dd class="col-7">@Model.Deployment.ApplicationName</dd>
+                    <dt class="col-5">Version</dt><dd class="col-7"><code>@Model.Deployment.Version</code></dd>
+                    <dt class="col-5">Mode</dt><dd class="col-7">@Model.Deployment.Mode</dd>
+                    <dt class="col-5">Status</dt>
+                    <dd class="col-7">
+                        <span id="status-badge" class="badge bg-primary">@Model.Deployment.StatusLabel</span>
+                    </dd>
+                    <dt class="col-5">By</dt><dd class="col-7">@Model.Deployment.DeployedBy</dd>
+                    <dt class="col-5">Started</dt><dd class="col-7">@(Model.Deployment.StartedAt?.ToString("HH:mm:ss") ?? "—")</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h6 class="card-title">Targets</h6>
+                @foreach (var t in Model.Deployment.Targets)
+                {
+                    var badgeCss = t.Status.ToString() switch
+                    {
+                        "Succeeded" => "bg-success",
+                        "Failed" => "bg-danger",
+                        "InProgress" => "bg-primary",
+                        _ => "bg-secondary"
+                    };
+                    <div class="mb-2 p-2 bg-light rounded">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold small">@t.ServerName</span>
+                            <span class="badge @badgeCss" id="target-status-@t.Id">@t.Status</span>
+                        </div>
+                        <div class="small text-muted">@t.WebsiteName → @t.AppPoolName</div>
+                        <div class="progress mt-1" style="height:4px">
+                            <div class="progress-bar" id="target-progress-@t.ServerId" style="width:0%"></div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-terminal me-2"></i>Live Deployment Log</span>
+                <div id="live-indicator" class="d-flex align-items-center gap-2">
+                    <span class="spinner-grow spinner-grow-sm text-success" role="status"></span>
+                    <span class="text-white-50 small">Streaming</span>
+                </div>
+            </div>
+            <div class="card-body p-0 bg-dark" style="height:500px;overflow-y:auto" id="log-container">
+                @foreach (var log in Model.ExistingLogs)
+                {
+                    var color = log.Level switch { "Error" => "text-danger", "Warning" => "text-warning", _ => "text-white-50" };
+                    <div class="px-3 py-1 @color log-line" style="font-family:monospace;font-size:0.82rem">
+                        <span class="text-white-50">@log.Timestamp.ToString("HH:mm:ss")</span> @log.Message
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/js/deployment.js"></script>
+<script>
+    initDeploymentConsole(@Model.Deployment.Id);
+</script>
+}

@@ -8,6 +8,7 @@ public interface IFtpDeploymentService
     Task<bool> TestConnectionAsync(string host, int port, string username, string password, bool passive, CancellationToken ct = default);
     Task EnsureFolderAsync(string ftpFolderUrl, string username, string password, bool passive, CancellationToken ct = default);
     Task UploadFolderAsync(string localFolder, string ftpFolderUrl, string username, string password, bool passive, bool overwrite, IProgress<(int copied, int total, string file)> progress, Action<string> log, CancellationToken ct = default);
+    Task UploadSingleFileAsync(string localFilePath, string ftpFileUrl, string username, string password, bool passive, CancellationToken ct = default);
 }
 
 public class FtpDeploymentService : IFtpDeploymentService
@@ -67,6 +68,9 @@ public class FtpDeploymentService : IFtpDeploymentService
             progress.Report((copied, total, (string)rel));
         }
     }
+
+    public Task UploadSingleFileAsync(string localFilePath, string ftpFileUrl, string username, string password, bool passive, CancellationToken ct = default)
+        => UploadFileAsync(localFilePath, ftpFileUrl, username, password, passive, ct);
 
     private static async Task UploadFileAsync(string localPath, string ftpUrl, string username, string password, bool passive, CancellationToken ct)
     {

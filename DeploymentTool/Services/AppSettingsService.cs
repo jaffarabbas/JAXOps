@@ -16,19 +16,24 @@ public class AppSettingsService
 
         foreach (var project in projects)
         {
-            var dir = Path.GetDirectoryName(project.Path);
+            // For published-folder items the Path is already the directory.
+            // For source projects the Path is the .csproj file so we need its parent.
+            var dir = project.IsPublishedFolder
+                ? project.Path
+                : Path.GetDirectoryName(project.Path);
+
             if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
                 continue;
 
             foreach (var pattern in Patterns)
-            foreach (var file in FindFiles(dir, pattern))
-                result.Add(new ConfigFileItem(file, project.Name));
+            foreach (var file in FindFiles(dir, pattern, skipBuildDirs: !project.IsPublishedFolder))
+                result.Add(new ConfigFileItem(file, project.Name, dir));
         }
 
         return result;
     }
 
-    private static IEnumerable<string> FindFiles(string dir, string pattern)
+    private static IEnumerable<string> FindFiles(string dir, string pattern, bool skipBuildDirs = true)
     {
         return Directory
             .EnumerateFiles(dir, pattern, new EnumerationOptions
@@ -39,6 +44,7 @@ public class AppSettingsService
             })
             .Where(f =>
             {
+                if (!skipBuildDirs) return true;
                 var rel = Path.GetRelativePath(dir, f);
                 return !rel.StartsWith("bin", StringComparison.OrdinalIgnoreCase)
                     && !rel.StartsWith("obj", StringComparison.OrdinalIgnoreCase);

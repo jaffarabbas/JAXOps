@@ -35,9 +35,10 @@ public class ConfigService
         Settings.Codebases = settings.Codebases
             .Select(c => new Codebase { Name = c.Name, Path = c.Path })
             .ToList();
-        Settings.PublishOutputRoot = settings.PublishOutputRoot;
-        Settings.PatchOutputRoot = settings.PatchOutputRoot;
-        Settings.IsDarkMode = settings.IsDarkMode;
+        Settings.PublishOutputRoot  = settings.PublishOutputRoot;
+        Settings.PatchOutputRoot    = settings.PatchOutputRoot;
+        Settings.IsDarkMode         = settings.IsDarkMode;
+        Settings.GitRepositories    = settings.GitRepositories;
     }
 
     private static string ResolveSettingsPath()

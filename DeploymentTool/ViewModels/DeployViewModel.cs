@@ -26,15 +26,6 @@ public class DeployViewModel : BaseViewModel
     private string _password       = string.Empty;
     private string _deploymentRoot = string.Empty;
 
-    // ── Optional custom share name (replaces C$ admin share) ────────────────
-    private string _shareName = string.Empty;
-
-    // ── FTP mode ─────────────────────────────────────────────────────────────
-    private bool   _useFtp         = false;
-    private string _ftpRootPath    = "/";
-    private int    _ftpPort        = 21;
-    private bool   _ftpPassiveMode = true;
-
     // ── Shared IIS config ────────────────────────────────────────────────────
     private string _iisSiteName = string.Empty;
 
@@ -49,10 +40,6 @@ public class DeployViewModel : BaseViewModel
     private bool _createAppPool           = true;
     private bool _createIisApplication    = true;
     private bool _startAppPoolAfterDeploy = true;
-    private bool _overwriteExistingFiles  = true;
-
-    // ── Custom source path (bypasses Publish tab project selection) ─────────
-    private string _customPublishPath = string.Empty;
 
     // ── Pool mode ────────────────────────────────────────────────────────────
     private bool   _usePerProjectPools = false;
@@ -64,23 +51,22 @@ public class DeployViewModel : BaseViewModel
     private double _deployProgress = 0;
 
     // ── Collections ──────────────────────────────────────────────────────────
-    public ObservableCollection<DeploymentLogItem>  DeployLog           { get; } = [];
+    public ObservableCollection<DeploymentLogItem>   DeployLog            { get; } = [];
     public ObservableCollection<ProjectDeployConfig> ProjectDeployConfigs { get; } = [];
 
     public IReadOnlyList<string> ClrVersionOptions   { get; } = ["v4.0", "v2.0", "No Managed Code"];
     public IReadOnlyList<string> PipelineModeOptions { get; } = ["Integrated", "Classic"];
 
     // ── Commands ──────────────────────────────────────────────────────────────
-    public ICommand TestConnectionCommand          { get; }
-    public ICommand DeployCommand                  { get; }
-    public ICommand CancelDeployCommand            { get; }
-    public ICommand ClearDeployLogCommand          { get; }
-    public ICommand RefreshProjectConfigsCommand   { get; }
-    public ICommand SelectAllConfigsCommand        { get; }
-    public ICommand ClearAllConfigsCommand         { get; }
-    public ICommand BrowseCustomPublishPathCommand { get; }
+    public ICommand TestConnectionCommand        { get; }
+    public ICommand DeployCommand                { get; }
+    public ICommand CancelDeployCommand          { get; }
+    public ICommand ClearDeployLogCommand        { get; }
+    public ICommand RefreshProjectConfigsCommand { get; }
+    public ICommand SelectAllConfigsCommand      { get; }
+    public ICommand ClearAllConfigsCommand       { get; }
 
-    // ── Shared connection properties ──────────────────────────────────────────
+    // ── Connection properties ──────────────────────────────────────────────────
     public string ServerHostname
     {
         get => _serverHostname;
@@ -105,61 +91,10 @@ public class DeployViewModel : BaseViewModel
         set { if (SetField(ref _deploymentRoot, value)) InvalidateCommands(); }
     }
 
-    public string ShareName
-    {
-        get => _shareName;
-        set => SetField(ref _shareName, value);
-    }
-
-    // ── FTP properties ────────────────────────────────────────────────────────
-    public bool UseFtp
-    {
-        get => _useFtp;
-        set
-        {
-            if (SetField(ref _useFtp, value))
-            {
-                OnPropertyChanged(nameof(UseSmb));
-                InvalidateCommands();
-            }
-        }
-    }
-
-    public bool UseSmb
-    {
-        get => !_useFtp;
-        set { if (value) UseFtp = false; }
-    }
-
-    public string FtpRootPath
-    {
-        get => _ftpRootPath;
-        set => SetField(ref _ftpRootPath, value);
-    }
-
-    public int FtpPort
-    {
-        get => _ftpPort;
-        set => SetField(ref _ftpPort, value);
-    }
-
-    public bool FtpPassiveMode
-    {
-        get => _ftpPassiveMode;
-        set => SetField(ref _ftpPassiveMode, value);
-    }
-
     public string IisSiteName
     {
         get => _iisSiteName;
         set => SetField(ref _iisSiteName, value);
-    }
-
-    // ── Custom publish source path ────────────────────────────────────────────
-    public string CustomPublishPath
-    {
-        get => _customPublishPath;
-        set { if (SetField(ref _customPublishPath, value)) InvalidateCommands(); }
     }
 
     // ── Single-pool properties ────────────────────────────────────────────────
@@ -193,7 +128,7 @@ public class DeployViewModel : BaseViewModel
         set => SetField(ref _enable32Bit, value);
     }
 
-    // ── Shared deploy option properties ──────────────────────────────────────
+    // ── Deploy option properties ──────────────────────────────────────────────
     public bool CreateAppPool
     {
         get => _createAppPool;
@@ -212,12 +147,6 @@ public class DeployViewModel : BaseViewModel
         set => SetField(ref _startAppPoolAfterDeploy, value);
     }
 
-    public bool OverwriteExistingFiles
-    {
-        get => _overwriteExistingFiles;
-        set => SetField(ref _overwriteExistingFiles, value);
-    }
-
     // ── Pool mode properties ──────────────────────────────────────────────────
     public bool UsePerProjectPools
     {
@@ -232,7 +161,6 @@ public class DeployViewModel : BaseViewModel
         }
     }
 
-    // Inverse of UsePerProjectPools — bound to the "Single Pool" RadioButton.
     public bool UseSinglePool
     {
         get => !_usePerProjectPools;
@@ -313,11 +241,9 @@ public class DeployViewModel : BaseViewModel
         ClearAllConfigsCommand = new RelayCommand(
             () => { foreach (var c in ProjectDeployConfigs) c.IsSelected = false; },
             () => ProjectDeployConfigs.Count > 0);
-
-        BrowseCustomPublishPathCommand = new RelayCommand(BrowseCustomPublishPath, () => !IsDeploying);
     }
 
-    // ── Commands implementation ───────────────────────────────────────────────
+    // ── Command implementations ───────────────────────────────────────────────
 
     private void RefreshProjectConfigs()
     {
@@ -332,7 +258,6 @@ public class DeployViewModel : BaseViewModel
             return;
         }
 
-        // Preserve any existing user edits by keying on ProjectName.
         var existing = ProjectDeployConfigs.ToDictionary(c => c.ProjectName, StringComparer.OrdinalIgnoreCase);
 
         ProjectDeployConfigs.Clear();
@@ -341,7 +266,6 @@ public class DeployViewModel : BaseViewModel
         {
             if (existing.TryGetValue(project.Name, out var prev))
             {
-                // Re-add the already-configured entry unchanged.
                 ProjectDeployConfigs.Add(prev);
             }
             else
@@ -370,16 +294,11 @@ public class DeployViewModel : BaseViewModel
     {
         IsDeploying   = true;
         CurrentStatus = "Testing connection…";
-        AppendLog($"Testing connection to {_serverHostname} ({(_useFtp ? "FTP" : "SMB")})…");
+        AppendLog($"Testing connection to {_serverHostname} (SMB/PS)…");
 
         try
         {
-            bool ok;
-            if (_useFtp)
-                ok = await _ftpService.TestConnectionAsync(_serverHostname, _ftpPort, _username, _password, _ftpPassiveMode).ConfigureAwait(false);
-            else
-                ok = await _connectionService.TestConnectionAsync(_serverHostname, _username, _password).ConfigureAwait(false);
-
+            var ok = await _connectionService.TestConnectionAsync(_serverHostname, _username, _password).ConfigureAwait(false);
             CurrentStatus = ok ? $"Connected to {_serverHostname}" : "Connection failed";
             AppendLog(
                 ok ? $"Connection successful: {_serverHostname}" : "Connection failed — check hostname, credentials, and firewall.",
@@ -398,32 +317,9 @@ public class DeployViewModel : BaseViewModel
 
     private async Task RunDeployAsync()
     {
-        // Build the per-project config list for whichever mode is active.
         IReadOnlyList<ProjectDeployConfig> configs;
 
-        if (!string.IsNullOrWhiteSpace(_customPublishPath))
-        {
-            // Custom path mode — deploy the specified folder directly, no project selection needed.
-            var folderName = System.IO.Path.GetFileName(_customPublishPath.TrimEnd('\\', '/'));
-            var alias      = string.IsNullOrWhiteSpace(_applicationAlias) ? folderName : _applicationAlias;
-            var poolName   = string.IsNullOrWhiteSpace(_appPoolName)      ? alias      : _appPoolName;
-
-            configs = new[]
-            {
-                new ProjectDeployConfig
-                {
-                    ProjectName        = alias,
-                    SourceOverridePath = _customPublishPath,
-                    AppPoolName        = poolName,
-                    ApplicationAlias   = alias,
-                    DotNetClrVersion   = _dotNetClrVersion,
-                    PipelineMode       = _pipelineMode,
-                    Enable32Bit        = _enable32Bit,
-                    IsSelected         = true
-                }
-            };
-        }
-        else if (_usePerProjectPools)
+        if (_usePerProjectPools)
         {
             configs = ProjectDeployConfigs.Where(c => c.IsSelected).ToList();
             if (configs.Count == 0)
@@ -441,7 +337,7 @@ public class DeployViewModel : BaseViewModel
             if (selected.Count == 0)
             {
                 MessageBox.Show(
-                    "Select at least one project on the Publish tab first, or set a Custom Publish Path on the Deploy tab.",
+                    "Select at least one project on the Publish tab first.",
                     "No Source Selected",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
@@ -469,15 +365,14 @@ public class DeployViewModel : BaseViewModel
             return;
         }
 
-        _cts          = new CancellationTokenSource();
-        IsDeploying   = true;
+        _cts           = new CancellationTokenSource();
+        IsDeploying    = true;
         DeployProgress = 0;
-        CurrentStatus  = "Starting deployment…";
+        CurrentStatus  = "Starting IIS deployment…";
 
         var profile = BuildSharedProfile();
-        var mode    = _usePerProjectPools ? "per-project pools" : "single pool";
-        AppendLog($"Deploying {configs.Count} project(s) → {_serverHostname}:{_deploymentRoot}  [{mode}]");
-        _mainLog($"[Deploy] Starting {configs.Count} project(s) → {_serverHostname}  [{mode}]");
+        AppendLog($"Configuring IIS for {configs.Count} project(s) on {_serverHostname}:{_deploymentRoot}");
+        _mainLog($"[Deploy] IIS config for {configs.Count} project(s) → {_serverHostname}");
 
         var progress = new Progress<DeploymentProgress>(p =>
             Application.Current.Dispatcher.Invoke(() =>
@@ -495,10 +390,10 @@ public class DeployViewModel : BaseViewModel
             Application.Current.Dispatcher.Invoke(() =>
             {
                 DeployProgress = 100;
-                CurrentStatus  = "Deployment complete";
-                AppendLog("All deployments succeeded.", DeployLogSeverity.Success);
-                _mainLog($"[Deploy] Completed successfully for {configs.Count} project(s).");
-                MessageBox.Show("Deployment completed successfully.", "Deploy",
+                CurrentStatus  = "IIS deployment complete";
+                AppendLog("IIS configuration completed successfully.", DeployLogSeverity.Success);
+                _mainLog($"[Deploy] IIS config completed for {configs.Count} project(s).");
+                MessageBox.Show("IIS deployment completed successfully.", "Deploy",
                     MessageBoxButton.OK, MessageBoxImage.Information);
             });
         }
@@ -517,7 +412,7 @@ public class DeployViewModel : BaseViewModel
                 CurrentStatus = "Deployment failed";
                 AppendLog($"ERROR: {ex.Message}", DeployLogSeverity.Error);
                 _mainLog($"[Deploy] FAILED: {ex.Message}");
-                MessageBox.Show($"Deployment failed:\n{ex.Message}", "Deploy Error",
+                MessageBox.Show($"IIS deployment failed:\n{ex.Message}", "Deploy Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             });
         }
@@ -534,8 +429,7 @@ public class DeployViewModel : BaseViewModel
         && !string.IsNullOrWhiteSpace(_username)
         && !string.IsNullOrWhiteSpace(_deploymentRoot)
         && (_usePerProjectPools || !string.IsNullOrWhiteSpace(_appPoolName))
-        // either projects are selected on Publish tab OR a custom path is provided
-        && (!string.IsNullOrWhiteSpace(_customPublishPath) || _getSelectedProjects().Count > 0 || _usePerProjectPools);
+        && (_getSelectedProjects().Count > 0 || _usePerProjectPools);
 
     private DeploymentProfile BuildSharedProfile() => new()
     {
@@ -543,36 +437,21 @@ public class DeployViewModel : BaseViewModel
         Username                = _username,
         Password                = _password,
         DeploymentRootPath      = _deploymentRoot,
-        ShareName               = _shareName,
         IisSiteName             = _iisSiteName,
         CreateAppPool           = _createAppPool,
         CreateIisApplication    = _createIisApplication,
         StartAppPoolAfterDeploy = _startAppPoolAfterDeploy,
-        OverwriteExistingFiles  = _overwriteExistingFiles,
         UsePerProjectPools      = _usePerProjectPools,
-        UseFtp                  = _useFtp,
-        FtpPort                 = _ftpPort,
-        FtpRootPath             = _ftpRootPath,
-        FtpPassiveMode          = _ftpPassiveMode
+        SkipFileTransfer        = true  // file transfer is handled by the Transfer tab
     };
-
-    private void BrowseCustomPublishPath()
-    {
-        var dlg = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "Select Published Application Folder"
-        };
-        if (dlg.ShowDialog() == true)
-            CustomPublishPath = dlg.FolderName;
-    }
 
     private void LogLine(string message)
     {
         var upper    = message.ToUpperInvariant();
-        var severity = upper.Contains("ERROR") || upper.Contains("FATAL")   ? DeployLogSeverity.Error
-                     : upper.Contains("WARN")                               ? DeployLogSeverity.Warning
-                     : upper.Contains("COMPLETE") || upper.Contains("SUCCESS") || upper.Contains("STARTED") || upper.Contains("READY")
-                                                                             ? DeployLogSeverity.Success
+        var severity = upper.Contains("ERROR") || upper.Contains("FATAL")      ? DeployLogSeverity.Error
+                     : upper.Contains("WARN")                                  ? DeployLogSeverity.Warning
+                     : upper.Contains("COMPLETE") || upper.Contains("SUCCESS")
+                       || upper.Contains("STARTED") || upper.Contains("READY") ? DeployLogSeverity.Success
                      : DeployLogSeverity.Info;
 
         AppendLog(message, severity);

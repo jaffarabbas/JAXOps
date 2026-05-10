@@ -1,0 +1,105 @@
+@page
+@model IISManager.WebPortal.Pages.Servers.CreateServerModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "Add Server";
+}
+
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Servers">Servers</a></li>
+            <li class="breadcrumb-item active">Add Server</li>
+        </ol>
+    </nav>
+    <h1 class="h3"><i class="bi bi-plus-circle me-2 text-primary"></i>Add Server</h1>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <form method="post">
+                    <div asp-validation-summary="ModelOnly" class="alert alert-danger d-none"></div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Name" class="form-label fw-semibold">Server Name *</label>
+                        <input asp-for="Input.Name" class="form-control" placeholder="e.g. PROD-WEB-01" />
+                        <span asp-validation-for="Input.Name" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Hostname" class="form-label fw-semibold">Hostname *</label>
+                        <input asp-for="Input.Hostname" class="form-control" placeholder="e.g. prod-web-01.internal" />
+                        <span asp-validation-for="Input.Hostname" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.IpAddress" class="form-label fw-semibold">IP Address *</label>
+                        <input asp-for="Input.IpAddress" class="form-control" placeholder="e.g. 10.0.1.50" />
+                        <span asp-validation-for="Input.IpAddress" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Environment" class="form-label fw-semibold">Environment *</label>
+                        <select asp-for="Input.Environment" class="form-select">
+                            <option value="">— Select —</option>
+                            <option>Development</option>
+                            <option>Staging</option>
+                            <option>UAT</option>
+                            <option>Production</option>
+                        </select>
+                        <span asp-validation-for="Input.Environment" class="text-danger small"></span>
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Group" class="form-label fw-semibold">Group</label>
+                        <input asp-for="Input.Group" class="form-control" placeholder="e.g. Web Tier" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label asp-for="Input.Description" class="form-label fw-semibold">Description</label>
+                        <textarea asp-for="Input.Description" class="form-control" rows="2"></textarea>
+                    </div>
+
+                    @if (Model.CreatedApiKey is not null)
+                    {
+                        <div class="alert alert-warning">
+                            <strong><i class="bi bi-key me-1"></i>API Key (copy now — shown once):</strong>
+                            <div class="mt-2">
+                                <code id="api-key-value" class="user-select-all">@Model.CreatedApiKey</code>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-2"
+                                        onclick="navigator.clipboard.writeText(document.getElementById('api-key-value').textContent)">
+                                    <i class="bi bi-clipboard"></i> Copy
+                                </button>
+                            </div>
+                            <p class="small mt-2 mb-0">Paste this into the agent's <code>appsettings.json</code> → <code>Agent.ApiKey</code>.</p>
+                        </div>
+                    }
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus-lg me-1"></i>Register Server
+                        </button>
+                        <a href="/Servers" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body">
+                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>Setup Instructions</h6>
+                <ol class="small text-muted">
+                    <li>Fill in the server details and click Register Server</li>
+                    <li>Copy the generated API key</li>
+                    <li>On the target IIS server, install the Agent service</li>
+                    <li>Paste the API key into the agent's <code>appsettings.json</code></li>
+                    <li>Start the agent: <code>sc start IISManagerAgent</code></li>
+                    <li>The server will appear Online within 30 seconds</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>

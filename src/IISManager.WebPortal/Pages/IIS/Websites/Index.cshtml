@@ -1,0 +1,176 @@
+@page
+@model IISManager.WebPortal.Pages.IIS.Websites.WebsitesIndexModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = "IIS Sites";
+}
+@section Scripts {
+@if (Model.SelectedServer is not null)
+{
+<script>
+(function () {
+    const serverId = @Model.SelectedServer.Id;
+    const conn = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/monitoring')
+        .withAutomaticReconnect()
+        .build();
+    conn.on('OnIISStateUpdate', function (evt) {
+        if (evt.serverId === serverId) location.reload();
+    });
+    conn.start().then(function () {
+        conn.invoke('SubscribeToServer', serverId).catch(console.error);
+    }).catch(console.error);
+})();
+</script>
+}
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="h3 mb-0"><i class="bi bi-globe me-2 text-primary"></i>IIS Sites</h1>
+</div>
+
+<!-- Server selector -->
+<div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+        <form method="get" class="d-flex align-items-center gap-3">
+            <label class="fw-semibold text-nowrap">Select Server:</label>
+            <select name="serverId" class="form-select" style="max-width:320px"
+                    onchange="this.form.submit()">
+                <option value="">— Choose a server —</option>
+                @foreach (var s in Model.Servers)
+                {
+                    <option value="@s.Id" selected="@(Model.SelectedServer?.Id == s.Id)">@s.Name (@s.Environment — @s.Status)</option>
+                }
+            </select>
+            @if (Model.SelectedServer is not null)
+            {
+                <a href="/IIS/Websites" class="btn btn-outline-secondary btn-sm">Clear</a>
+            }
+        </form>
+    </div>
+</div>
+
+@if (Model.SelectedServer is null)
+{
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-arrow-up-circle fs-1 d-block mb-2"></i>
+        Select a server above to view its IIS websites and application pools.
+    </div>
+}
+else
+{
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-3" id="iisTab">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-websites">
+                <i class="bi bi-globe me-1"></i>Websites
+                <span class="badge bg-primary ms-1">@Model.Websites.Count()</span>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-apppools">
+                <i class="bi bi-layers me-1"></i>App Pools
+                <span class="badge bg-primary ms-1">@Model.AppPools.Count()</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- Websites tab -->
+        <div class="tab-pane fade show active" id="tab-websites">
+            <div class="card border-0 shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>App Pool</th>
+                                <th>Physical Path</th>
+                                <th>Bindings</th>
+                                <th>Last Synced</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var w in Model.Websites)
+                            {
+                                var wBadge = w.Status == "Started" ? "bg-success" : "bg-danger";
+                                <tr>
+                                    <td class="fw-semibold">@w.Name</td>
+                                    <td><span class="badge @wBadge">@w.Status</span></td>
+                                    <td><code class="small">@w.DefaultAppPool</code></td>
+                                    <td class="text-muted small">@w.PhysicalPath</td>
+                                    <td class="text-muted small"><code>@w.BindingsJson</code></td>
+                                    <td class="text-muted small">@w.LastSyncedAt.ToString("dd/MM HH:mm")</td>
+                                </tr>
+                            }
+                            @if (!Model.Websites.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        No websites found. Go to
+                                        <a href="/Servers/Details?id=@Model.SelectedServer.Id">@Model.SelectedServer.Name</a>
+                                        and click Sync IIS State.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- App Pools tab -->
+        <div class="tab-pane fade" id="tab-apppools">
+            <div class="card border-0 shadow-sm">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Status</th>
+                                <th>Runtime</th>
+                                <th>Pipeline</th>
+                                <th>Auto Start</th>
+                                <th>Last Synced</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var p in Model.AppPools)
+                            {
+                                var pBadge = p.Status == "Started" ? "bg-success" : "bg-danger";
+                                <tr>
+                                    <td class="fw-semibold">@p.Name</td>
+                                    <td><span class="badge @pBadge">@p.Status</span></td>
+                                    <td><code class="small">@p.RuntimeVersion</code></td>
+                                    <td class="text-muted small">@p.PipelineMode</td>
+                                    <td>
+                                        @if (p.AutoStart)
+                                        {
+                                            <i class="bi bi-check-circle text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-x-circle text-muted"></i>
+                                        }
+                                    </td>
+                                    <td class="text-muted small">@p.LastSyncedAt.ToString("dd/MM HH:mm")</td>
+                                </tr>
+                            }
+                            @if (!Model.AppPools.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="text-center text-muted py-4">
+                                        No app pools found. Go to
+                                        <a href="/Servers/Details?id=@Model.SelectedServer.Id">@Model.SelectedServer.Name</a>
+                                        and click Sync IIS State.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}

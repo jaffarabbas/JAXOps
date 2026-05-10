@@ -64,7 +64,15 @@ public class DeploymentOrchestratorService
                     StepName = $"Uploading {p.copied}/{p.total}: {p.file}"
                 }));
 
-            if (sharedProfile.UseFtp)
+            if (sharedProfile.SkipFileTransfer)
+            {
+                // ── IIS-ONLY MODE — file transfer handled separately ────────
+                log($"[{config.ProjectName}] Skipping file transfer (IIS-only mode).");
+                Report("Skip transfer");
+                Report("Skip folder");
+                Report("Skip copy");
+            }
+            else if (sharedProfile.UseFtp)
             {
                 // ── FTP MODE ────────────────────────────────────────────────
 

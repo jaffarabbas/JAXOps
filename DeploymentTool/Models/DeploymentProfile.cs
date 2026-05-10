@@ -31,4 +31,7 @@ public class DeploymentProfile
     // The orchestrator appends the app alias to build the upload URL.
     public string FtpRootPath    { get; set; } = "/";
     public bool   FtpPassiveMode { get; set; } = true;
+
+    // When true the orchestrator skips all file transfer steps and only runs IIS configuration.
+    public bool SkipFileTransfer { get; set; } = false;
 }

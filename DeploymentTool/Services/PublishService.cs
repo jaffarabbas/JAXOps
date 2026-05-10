@@ -12,7 +12,9 @@ public class PublishService
         Action<string> log,
         CancellationToken ct = default)
     {
-        var tasks = projects.Select(p => PublishOneAsync(p, outputRoot, log, ct));
+        var tasks = projects
+            .Where(p => !p.IsPublishedFolder)   // skip pre-published output folders
+            .Select(p => PublishOneAsync(p, outputRoot, log, ct));
         await Task.WhenAll(tasks);
     }
 

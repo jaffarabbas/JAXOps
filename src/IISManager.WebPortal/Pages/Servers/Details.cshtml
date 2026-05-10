@@ -1,0 +1,503 @@
+@page
+@model IISManager.WebPortal.Pages.Servers.ServerDetailsModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = Model.Server.Name;
+    var badgeCss = Model.Server.Status.ToString() switch
+    {
+        "Online"  => "bg-success",
+        "Offline" => "bg-danger",
+        "Warning" => "bg-warning text-dark",
+        _         => "bg-secondary"
+    };
+}
+
+<div class="mb-4">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Servers">Servers</a></li>
+            <li class="breadcrumb-item active">@Model.Server.Name</li>
+        </ol>
+    </nav>
+    <div class="d-flex align-items-center gap-3">
+        <h1 class="h3 mb-0"><i class="bi bi-hdd me-2 text-primary"></i>@Model.Server.Name</h1>
+        <span class="badge @badgeCss fs-6">@Model.Server.Status</span>
+    </div>
+</div>
+
+@if (Model.NewApiKey is not null)
+{
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <strong><i class="bi bi-key me-1"></i>New API Key (copy now — shown once):</strong>
+        <div class="mt-2 d-flex align-items-center gap-2">
+            <code id="regen-key" class="user-select-all fs-6">@Model.NewApiKey</code>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+                    onclick="navigator.clipboard.writeText(document.getElementById('regen-key').textContent)">
+                <i class="bi bi-clipboard"></i> Copy
+            </button>
+        </div>
+        <p class="small mt-2 mb-0">Paste this into the agent's <code>appsettings.json</code> → <code>Agent.ApiKey</code> and restart the agent service.</p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+@if (TempData["Success"] is string successMsg)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle me-1"></i>@successMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+@if (TempData["Error"] is string errorMsg)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle me-1"></i>@errorMsg
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+}
+
+<div class="row g-4">
+    <!-- Server Info -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent fw-semibold">
+                <i class="bi bi-info-circle me-2"></i>Server Info
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr><th class="text-muted w-40">Hostname</th><td>@Model.Server.Hostname</td></tr>
+                    <tr><th class="text-muted">IP Address</th><td><code>@Model.Server.IpAddress</code></td></tr>
+                    <tr><th class="text-muted">Environment</th><td><span class="badge bg-secondary">@Model.Server.Environment</span></td></tr>
+                    <tr><th class="text-muted">Group</th><td>@(Model.Server.Group ?? "—")</td></tr>
+                    <tr><th class="text-muted">Agent Version</th><td>@(Model.Server.AgentVersion ?? "—")</td></tr>
+                    <tr><th class="text-muted">Last Heartbeat</th><td class="text-muted small">@(Model.Server.LastHeartbeat?.ToString("dd/MM/yyyy HH:mm:ss") ?? "Never")</td></tr>
+                    <tr><th class="text-muted">Registered</th><td class="text-muted small">@Model.Server.CreatedAt.ToString("dd/MM/yyyy") by @Model.Server.CreatedBy</td></tr>
+                    @if (!string.IsNullOrEmpty(Model.Server.Description))
+                    {
+                        <tr><th class="text-muted">Description</th><td>@Model.Server.Description</td></tr>
+                    }
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Management -->
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-transparent fw-semibold">
+                <i class="bi bi-key me-2"></i>Agent API Key
+            </div>
+            <div class="card-body d-flex flex-column justify-content-between">
+                <p class="text-muted small">
+                    The API key is stored as a hash — the plain-text value is only shown at creation or after regeneration.
+                    Regenerating will disconnect the agent until you update its config.
+                </p>
+                <div class="d-flex gap-2">
+                    <form method="post" asp-page-handler="Sync" id="syncForm">
+                        <input type="hidden" name="id" value="@Model.Server.Id" />
+                        <button id="syncBtn" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-arrow-repeat me-1"></i>Sync IIS State
+                        </button>
+                    </form>
+                    <form method="post" asp-page-handler="RegenerateKey"
+                          onsubmit="return confirm('Regenerate API key for @Model.Server.Name? The agent will disconnect until you update its config.')">
+                        <input type="hidden" name="id" value="@Model.Server.Id" />
+                        <button class="btn btn-warning btn-sm">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Regenerate Key
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- IIS Websites -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-globe me-2"></i>IIS Websites</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-pill">@Model.Websites.Count()</span>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createSiteModal">
+                        <i class="bi bi-plus-lg me-1"></i>Add Site
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>App Pool</th>
+                            <th>Physical Path</th>
+                            <th>Last Synced</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var w in Model.Websites)
+                        {
+                            var wBadge = w.Status == "Started" ? "bg-success" : "bg-danger";
+                            <tr>
+                                <td class="fw-semibold">@w.Name</td>
+                                <td><span class="badge @wBadge">@w.Status</span></td>
+                                <td><code class="small">@w.DefaultAppPool</code></td>
+                                <td class="text-muted small">@w.PhysicalPath</td>
+                                <td class="text-muted small">@w.LastSyncedAt.ToString("dd/MM HH:mm")</td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        @if (w.Status != "Started")
+                                        {
+                                            <form method="post" asp-page-handler="StartSite" class="iis-action-form">
+                                                <input type="hidden" name="id" value="@Model.Server.Id" />
+                                                <input type="hidden" name="siteName" value="@w.Name" />
+                                                <button class="btn btn-success btn-sm" title="Start">
+                                                    <i class="bi bi-play-fill"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" asp-page-handler="StopSite" class="iis-action-form"
+                                                  onsubmit="return confirm('Stop site @w.Name?')">
+                                                <input type="hidden" name="id" value="@Model.Server.Id" />
+                                                <input type="hidden" name="siteName" value="@w.Name" />
+                                                <button class="btn btn-danger btn-sm" title="Stop">
+                                                    <i class="bi bi-stop-fill"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.Websites.Any())
+                        {
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No websites synced yet.
+                                    <form method="post" asp-page-handler="Sync" class="d-inline">
+                                        <input type="hidden" name="id" value="@Model.Server.Id" />
+                                        <button type="submit" class="btn btn-link p-0 text-muted">Click Sync IIS State to populate.</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Pools -->
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-transparent fw-semibold d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-layers me-2"></i>Application Pools</span>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary rounded-pill">@Model.AppPools.Count()</span>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createPoolModal">
+                        <i class="bi bi-plus-lg me-1"></i>Add Pool
+                    </button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Name</th>
+                            <th>Status</th>
+                            <th>Runtime</th>
+                            <th>Pipeline</th>
+                            <th>Auto Start</th>
+                            <th>Last Synced</th>
+                            <th class="text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in Model.AppPools)
+                        {
+                            var pBadge = p.Status == "Started" ? "bg-success" : "bg-danger";
+                            <tr>
+                                <td class="fw-semibold">@p.Name</td>
+                                <td><span class="badge @pBadge">@p.Status</span></td>
+                                <td><code class="small">@p.RuntimeVersion</code></td>
+                                <td class="text-muted small">@p.PipelineMode</td>
+                                <td>
+                                    @if (p.AutoStart)
+                                    {
+                                        <i class="bi bi-check-circle text-success"></i>
+                                    }
+                                    else
+                                    {
+                                        <i class="bi bi-x-circle text-muted"></i>
+                                    }
+                                </td>
+                                <td class="text-muted small">@p.LastSyncedAt.ToString("dd/MM HH:mm")</td>
+                                <td class="text-end">
+                                    <div class="d-flex gap-1 justify-content-end">
+                                        @if (p.Status != "Started")
+                                        {
+                                            <form method="post" asp-page-handler="StartPool" class="iis-action-form">
+                                                <input type="hidden" name="id" value="@Model.Server.Id" />
+                                                <input type="hidden" name="poolName" value="@p.Name" />
+                                                <button class="btn btn-success btn-sm" title="Start">
+                                                    <i class="bi bi-play-fill"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form method="post" asp-page-handler="StopPool" class="iis-action-form"
+                                                  onsubmit="return confirm('Stop app pool @p.Name?')">
+                                                <input type="hidden" name="id" value="@Model.Server.Id" />
+                                                <input type="hidden" name="poolName" value="@p.Name" />
+                                                <button class="btn btn-danger btn-sm" title="Stop">
+                                                    <i class="bi bi-stop-fill"></i>
+                                                </button>
+                                            </form>
+                                        }
+                                        <form method="post" asp-page-handler="RecyclePool" class="iis-action-form">
+                                            <input type="hidden" name="id" value="@Model.Server.Id" />
+                                            <input type="hidden" name="poolName" value="@p.Name" />
+                                            <button class="btn btn-warning btn-sm" title="Recycle">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                        @if (!Model.AppPools.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    No application pools synced yet.
+                                    <form method="post" asp-page-handler="Sync" class="d-inline">
+                                        <input type="hidden" name="id" value="@Model.Server.Id" />
+                                        <button type="submit" class="btn btn-link p-0 text-muted">Click Sync IIS State to populate.</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create Site Modal -->
+<div class="modal fade" id="createSiteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" asp-page-handler="CreateSite" class="iis-action-form" data-modal="createSiteModal">
+            <input type="hidden" name="id" value="@Model.Server.Id" />
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-globe me-2"></i>Add IIS Website</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Site Name <span class="text-danger">*</span></label>
+                        <input asp-for="NewSite.Name" class="form-control" placeholder="MySite" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Physical Path <span class="text-danger">*</span></label>
+                        <input asp-for="NewSite.PhysicalPath" class="form-control" placeholder="C:\inetpub\wwwroot\MySite" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Application Pool</label>
+                        <input asp-for="NewSite.AppPoolName" class="form-control" placeholder="DefaultAppPool (leave blank to use site name)" />
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Protocol</label>
+                            <select asp-for="NewSite.Protocol" class="form-select">
+                                <option value="http">http</option>
+                                <option value="https">https</option>
+                            </select>
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Port</label>
+                            <input asp-for="NewSite.Port" type="number" class="form-control" min="1" max="65535" />
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label fw-semibold">Host Name</label>
+                            <input asp-for="NewSite.HostName" class="form-control" placeholder="mysite.local" />
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create Site</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+(function () {
+    const serverId = @Model.Server.Id;
+    let autoSyncPending = false;
+
+    // Command types that should trigger an auto-sync when they complete.
+    // SyncIISState is intentionally excluded — its completion is signalled
+    // by OnIISStateUpdate, and including it here would cause an infinite loop.
+    const IIS_ACTION_TYPES = new Set([
+        'StartWebsite', 'StopWebsite', 'RestartWebsite', 'CreateWebsite', 'DeleteWebsite',
+        'StartApplicationPool', 'StopApplicationPool', 'RestartApplicationPool',
+        'RecycleApplicationPool', 'CreateApplicationPool', 'DeleteApplicationPool'
+    ]);
+
+    // ── SignalR ────────────────────────────────────────────────────────
+    const conn = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/monitoring')
+        .withAutomaticReconnect()
+        .build();
+
+    // Agent has written fresh IIS state to DB — reload to show it
+    conn.on('OnIISStateUpdate', function (evt) {
+        if (evt.serverId !== serverId) return;
+        autoSyncPending = false;
+        location.reload();
+    });
+
+    // Agent finished executing a command — auto-sync only for IIS actions,
+    // never for SyncIISState itself (that would loop indefinitely)
+    conn.on('OnCommandResult', function (evt) {
+        if (IIS_ACTION_TYPES.has(evt.commandType)) {
+            if (evt.success) {
+                showToast('success', evt.message || 'Command completed.');
+            } else {
+                showToast('danger', evt.error || 'Command failed.');
+            }
+            triggerAutoSync();
+        }
+    });
+
+    conn.start().then(function () {
+        conn.invoke('SubscribeToServer', serverId).catch(console.error);
+    }).catch(console.error);
+
+    // ── Auto-sync triggered after every IIS action ─────────────────────
+    async function triggerAutoSync() {
+        if (autoSyncPending) return;
+        autoSyncPending = true;
+        try {
+            await fetch(document.getElementById('syncForm').action, {
+                method: 'POST',
+                body: new FormData(document.getElementById('syncForm'))
+            });
+            // OnIISStateUpdate will fire → page reloads. Safety fallback:
+            setTimeout(function () { if (autoSyncPending) location.reload(); }, 20000);
+        } catch {
+            autoSyncPending = false;
+        }
+    }
+
+    // ── IIS action forms (Start / Stop / Recycle / Create) ────────────
+    document.addEventListener('submit', async function (e) {
+        const form = e.target;
+        if (!form.classList.contains('iis-action-form')) return;
+        e.preventDefault();
+
+        const btn = form.querySelector('[type=submit]');
+        const origHtml = btn ? btn.innerHTML : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+        }
+
+        // Close the parent modal immediately (Create Site / Create Pool)
+        const modalId = form.dataset.modal;
+        if (modalId) bootstrap.Modal.getInstance(document.getElementById(modalId))?.hide();
+
+        try {
+            await fetch(form.action, { method: 'POST', body: new FormData(form) });
+            showToast('info', 'Command sent — waiting for agent…');
+            // Chain: OnCommandResult → triggerAutoSync → OnIISStateUpdate → reload
+            // Safety fallback if SignalR chain never completes:
+            setTimeout(function () { if (btn && btn.disabled) location.reload(); }, 30000);
+        } catch {
+            if (btn) { btn.disabled = false; btn.innerHTML = origHtml; }
+            showToast('danger', 'Failed to send command.');
+        }
+    });
+
+    // ── Manual sync button ─────────────────────────────────────────────
+    const syncForm = document.getElementById('syncForm');
+    const syncBtn  = document.getElementById('syncBtn');
+    const syncOrigHtml = syncBtn.innerHTML;
+
+    syncForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status"></span>Syncing…';
+        try {
+            await fetch(syncForm.action, { method: 'POST', body: new FormData(syncForm) });
+            setTimeout(function () { if (syncBtn.disabled) location.reload(); }, 30000);
+        } catch {
+            syncBtn.disabled = false;
+            syncBtn.innerHTML = syncOrigHtml;
+            showToast('danger', 'Failed to send sync command.');
+        }
+    });
+
+    // ── Toast ──────────────────────────────────────────────────────────
+    function showToast(type, msg) {
+        const colorMap = { success: 'success', danger: 'danger', info: 'primary' };
+        const div = document.createElement('div');
+        div.className = 'alert alert-' + (colorMap[type] || type) +
+            ' alert-dismissible fade show position-fixed bottom-0 end-0 m-3 shadow';
+        div.style.cssText = 'z-index:9999;max-width:360px';
+        div.innerHTML = msg + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+        document.body.appendChild(div);
+        setTimeout(function () { div.remove(); }, 7000);
+    }
+})();
+</script>
+}
+
+<!-- Create App Pool Modal -->
+<div class="modal fade" id="createPoolModal" tabindex="-1">
+    <div class="modal-dialog">
+        <form method="post" asp-page-handler="CreatePool" class="iis-action-form" data-modal="createPoolModal">
+            <input type="hidden" name="id" value="@Model.Server.Id" />
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-layers me-2"></i>Add Application Pool</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Pool Name <span class="text-danger">*</span></label>
+                        <input asp-for="NewPool.Name" class="form-control" placeholder="MyAppPool" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">.NET Runtime Version</label>
+                        <select asp-for="NewPool.RuntimeVersion" class="form-select">
+                            <option value="v4.0">v4.0 (.NET Framework 4.x)</option>
+                            <option value="v2.0">v2.0 (.NET Framework 2.x)</option>
+                            <option value="">No Managed Code (.NET Core / .NET 5+)</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Pipeline Mode</label>
+                        <select asp-for="NewPool.PipelineMode" class="form-select">
+                            <option value="Integrated">Integrated</option>
+                            <option value="Classic">Classic</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Create Pool</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
