@@ -1,6 +1,7 @@
 using IISManager.AgentService.CommandHandlers;
 using IISManager.Contracts.Commands;
 using IISManager.Contracts.Events;
+using IISManager.Contracts.Enums;
 using IISManager.Shared.Constants;
 using Microsoft.AspNetCore.SignalR.Client;
 using System.Text.Json;
@@ -60,6 +61,7 @@ public class AgentSignalRClient
         _connection.Reconnected += async connectionId =>
         {
             _logger.LogInformation("Agent reconnected with ConnectionId {ConnectionId}", connectionId);
+            await SendAgentLogAsync("Agent reconnected to portal", "Info", "Agent", ct);
             await SendHeartbeatAsync(ct);
         };
 
@@ -71,6 +73,7 @@ public class AgentSignalRClient
 
         await _connection.StartAsync(ct);
         _logger.LogInformation("Agent connected to portal at {Url}", _config.PortalUrl);
+        await SendAgentLogAsync("Agent connected to portal", "Info", "Agent", ct);
 
         // Initial heartbeat
         await SendHeartbeatAsync(ct);
@@ -117,6 +120,16 @@ public class AgentSignalRClient
             await _connection.InvokeAsync(method, eventData, ct);
         }
     }
+
+    public Task SendAgentLogAsync(string message, string level = "Info", string? category = null, CancellationToken ct = default)
+        => SendEventAsync(SignalRConstants.PortalMethods.ReportAgentLog, new AgentLogEvent
+        {
+            ServerId = _config.ServerId,
+            Message = message,
+            Level = level,
+            Category = category,
+            Timestamp = DateTime.UtcNow
+        }, ct);
 
     private async Task SendHeartbeatAsync(CancellationToken ct)
     {

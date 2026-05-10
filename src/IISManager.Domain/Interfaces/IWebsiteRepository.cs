@@ -8,4 +8,5 @@ public interface IWebsiteRepository
     Task<Website?> GetByServerAndNameAsync(int serverId, string name);
     Task UpsertAsync(Website website);
     Task DeleteByServerIdAsync(int serverId);
+    Task DeleteStaleAsync(int serverId, IEnumerable<long> activeIISIds);
 }

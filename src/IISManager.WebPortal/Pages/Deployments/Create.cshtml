@@ -430,8 +430,9 @@
         try {
             const resp = await fetch('/Deployments/Create?handler=CreateApplication',
                 { method: 'POST', body: fd });
-            const data = await resp.json();
-            if (!resp.ok) { showError('appModalError', data.error || 'Failed to create application.'); return; }
+            let data;
+            try { data = await resp.json(); } catch { data = {}; }
+            if (!resp.ok) { showError('appModalError', data.error || `Server error (${resp.status}) — check server logs.`); return; }
 
             // Add to dropdown and select
             const appSelect = document.getElementById('appSelect');
@@ -490,8 +491,9 @@
         try {
             const resp = await fetch('/Deployments/Create?handler=UploadPackage',
                 { method: 'POST', body: fd });
-            const data = await resp.json();
-            if (!resp.ok) { showError('pkgModalError', data.error || 'Upload failed.'); return; }
+            let data;
+            try { data = await resp.json(); } catch { data = {}; }
+            if (!resp.ok) { showError('pkgModalError', data.error || `Server error (${resp.status}) — check server logs.`); return; }
 
             // Add to dropdown and select
             const pkgSelect = document.getElementById('pkgSelect');

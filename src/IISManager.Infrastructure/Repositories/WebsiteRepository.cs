@@ -48,4 +48,20 @@ public class WebsiteRepository : IWebsiteRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("DELETE FROM Websites WHERE ServerId = @ServerId", new { ServerId = serverId });
     }
+
+    public async Task DeleteStaleAsync(int serverId, IEnumerable<long> activeIISIds)
+    {
+        using var conn = _db.CreateConnection();
+        var ids = activeIISIds.ToList();
+        if (ids.Count == 0)
+        {
+            await conn.ExecuteAsync("DELETE FROM Websites WHERE ServerId = @ServerId", new { ServerId = serverId });
+        }
+        else
+        {
+            await conn.ExecuteAsync(
+                "DELETE FROM Websites WHERE ServerId = @ServerId AND IISId NOT IN @IISIds",
+                new { ServerId = serverId, IISIds = ids });
+        }
+    }
 }

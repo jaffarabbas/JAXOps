@@ -5,7 +5,7 @@ public class Application
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
-    public int DefaultServerId { get; set; }
+    public int? DefaultServerId { get; set; }
     public string DefaultWebsiteName { get; set; } = string.Empty;
     public string DefaultAppPoolName { get; set; } = string.Empty;
     public string PhysicalPath { get; set; } = string.Empty;

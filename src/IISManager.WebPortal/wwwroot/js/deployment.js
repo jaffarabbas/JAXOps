@@ -41,6 +41,24 @@ function initDeploymentConsole(deploymentId) {
         .then(() => conn.invoke('SubscribeToDeployment', deploymentId))
         .catch(console.error);
 
+    // Poll status every 5 s while InProgress — catches failures that happen before SignalR is subscribed
+    let pollTimer = setInterval(async () => {
+        try {
+            const resp = await fetch(`/api/deployments/${deploymentId}/status`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            if (statusBadge) {
+                statusBadge.textContent = data.status;
+                statusBadge.className = `badge ${statusBadge_css(data.status)}`;
+            }
+            if (data.status !== 'Queued' && data.status !== 'InProgress') {
+                clearInterval(pollTimer);
+                if (liveIndicator)
+                    liveIndicator.innerHTML = '<span class="text-white-50 small">Completed</span>';
+            }
+        } catch { /* ignore */ }
+    }, 5000);
+
     function appendLogLine(timestamp, message, level) {
         if (!logContainer) return;
         const div = document.createElement('div');

@@ -132,10 +132,14 @@ public class DeploymentExecutorService
                 var tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
                 ZipFile.ExtractToDirectory(packagePath, tempPath);
 
+                // Find the web app root inside the ZIP (handles any nesting depth)
+                var contentRoot = FindWebAppRoot(tempPath);
+                await Log($"[{DateTime.UtcNow:HH:mm:ss}] Content root: {Path.GetRelativePath(tempPath, contentRoot).Replace("\\", "/")}");
+
                 // 9. Replace files
                 await Log($"[{DateTime.UtcNow:HH:mm:ss}] Replacing application files");
                 await Progress(70, "Replacing files");
-                CopyDirectory(tempPath, cmd.PhysicalPath, excludeFileName: AgentConstants.AppOfflineFileName);
+                CopyDirectory(contentRoot, cmd.PhysicalPath, excludeFileName: AgentConstants.AppOfflineFileName);
                 Directory.Delete(tempPath, recursive: true);
                 File.Delete(packagePath);
 
@@ -232,13 +236,23 @@ public class DeploymentExecutorService
         => _config.AllowedDeployPaths.Any(allowed =>
             path.StartsWith(allowed, StringComparison.OrdinalIgnoreCase));
 
-    private static async Task<string> DownloadPackageAsync(DeployApplicationCommand cmd, CancellationToken ct)
+    private async Task<string> DownloadPackageAsync(DeployApplicationCommand cmd, CancellationToken ct)
     {
-        // In production the portal serves packages via an authenticated endpoint.
-        // For simplicity the agent constructs the URL from config + PackageUrl (relative path).
+        if (string.IsNullOrWhiteSpace(_config.PortalUrl))
+            throw new InvalidOperationException("Agent:PortalUrl is not configured in appsettings.json");
+
+        var fullUrl = $"{_config.PortalUrl.TrimEnd('/')}/{cmd.PackageUrl.TrimStart('/')}";
+        _logger.LogInformation("Downloading package from {Url}", fullUrl);
         var tempFile = Path.Combine(Path.GetTempPath(), $"pkg_{cmd.DeploymentId}_{Guid.NewGuid():N}.zip");
-        using var http = new HttpClient();
-        var bytes = await http.GetByteArrayAsync(cmd.PackageUrl, ct);
+
+        HttpMessageHandler handler = _config.AllowInsecureSsl
+            ? new HttpClientHandler { ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator }
+            : new HttpClientHandler();
+
+        using var http = new HttpClient(handler);
+        http.DefaultRequestHeaders.Add(SignalRConstants.AgentApiKeyHeader, _config.ApiKey);
+
+        var bytes = await http.GetByteArrayAsync(fullUrl, ct);
         await File.WriteAllBytesAsync(tempFile, bytes, ct);
         return tempFile;
     }
@@ -249,6 +263,27 @@ public class DeploymentExecutorService
         using var stream = File.OpenRead(filePath);
         var hash = Convert.ToHexString(sha.ComputeHash(stream));
         return string.Equals(hash, expectedHash, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // BFS through extracted ZIP to find the real web app root — the shallowest directory
+    // that contains web.config or a Bin/ folder. Handles any wrapper structure (VB2/publish/...,
+    // MyApp/publish/..., etc.) regardless of whether the wrapper folder also has other files.
+    private static string FindWebAppRoot(string extractedRoot)
+    {
+        var queue = new Queue<string>();
+        queue.Enqueue(extractedRoot);
+        while (queue.Count > 0)
+        {
+            var dir = queue.Dequeue();
+            var hasWebConfig = File.Exists(Path.Combine(dir, "web.config"));
+            var hasBin = Directory.Exists(Path.Combine(dir, "bin")) ||
+                         Directory.Exists(Path.Combine(dir, "Bin"));
+            if (hasWebConfig || hasBin)
+                return dir;
+            foreach (var sub in Directory.GetDirectories(dir))
+                queue.Enqueue(sub);
+        }
+        return extractedRoot;
     }
 
     private static void CopyDirectory(string source, string dest, string? excludeFileName = null)

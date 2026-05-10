@@ -1,0 +1,244 @@
+@page
+@model IISManager.WebPortal.Pages.Agents.AgentLogsModel
+@{
+    Layout = "_Layout";
+    ViewData["Title"] = $"Agent Log — {Model.Server?.Name}";
+    var (badgeCss, statusDot) = Model.Server!.Status.ToString() switch
+    {
+        "Online"  => ("bg-success", "text-success"),
+        "Offline" => ("bg-danger",  "text-danger"),
+        "Warning" => ("bg-warning text-dark", "text-warning"),
+        _         => ("bg-secondary", "text-secondary")
+    };
+}
+
+<div class="mb-3">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/Agents">Agent Logs</a></li>
+            <li class="breadcrumb-item active">@Model.Server!.Name</li>
+        </ol>
+    </nav>
+</div>
+
+<div class="row g-3">
+
+    <!-- Left: server info card -->
+    <div class="col-lg-3">
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body">
+                <h6 class="card-title mb-3">
+                    <i class="bi bi-hdd-network me-2"></i>@Model.Server.Name
+                </h6>
+                <dl class="row mb-0 small">
+                    <dt class="col-5 text-muted">Status</dt>
+                    <dd class="col-7">
+                        <span class="badge @badgeCss" id="agent-status-badge">@Model.Server.Status</span>
+                    </dd>
+                    <dt class="col-5 text-muted">Host</dt>
+                    <dd class="col-7">@Model.Server.Hostname</dd>
+                    <dt class="col-5 text-muted">IP</dt>
+                    <dd class="col-7"><code>@Model.Server.IpAddress</code></dd>
+                    <dt class="col-5 text-muted">Env</dt>
+                    <dd class="col-7"><span class="badge bg-secondary">@Model.Server.Environment</span></dd>
+                    <dt class="col-5 text-muted">Version</dt>
+                    <dd class="col-7">@(Model.Server.AgentVersion ?? "—")</dd>
+                    <dt class="col-5 text-muted">Heartbeat</dt>
+                    <dd class="col-7 text-muted" id="last-heartbeat">
+                        @(Model.Server.LastHeartbeat?.ToString("HH:mm:ss") ?? "—")
+                    </dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Health card (live) -->
+        <div class="card border-0 shadow-sm" id="health-card" style="display:none">
+            <div class="card-body">
+                <h6 class="card-title mb-3"><i class="bi bi-activity me-2 text-success"></i>Live Health</h6>
+                <dl class="row mb-0 small">
+                    <dt class="col-5 text-muted">CPU</dt>
+                    <dd class="col-7"><span id="h-cpu">—</span>%</dd>
+                    <dt class="col-5 text-muted">RAM</dt>
+                    <dd class="col-7"><span id="h-ram">—</span></dd>
+                    <dt class="col-5 text-muted">Disk</dt>
+                    <dd class="col-7"><span id="h-disk">—</span></dd>
+                    <dt class="col-5 text-muted">IIS</dt>
+                    <dd class="col-7"><span id="h-iis">—</span></dd>
+                    <dt class="col-5 text-muted">Sites</dt>
+                    <dd class="col-7"><span id="h-sites">—</span></dd>
+                    <dt class="col-5 text-muted">Pools</dt>
+                    <dd class="col-7"><span id="h-pools">—</span></dd>
+                </dl>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-sm btn-outline-secondary flex-fill" id="clearBtn">
+                <i class="bi bi-eraser me-1"></i>Clear
+            </button>
+            <button class="btn btn-sm btn-outline-secondary flex-fill" id="pauseBtn">
+                <i class="bi bi-pause-fill me-1"></i>Pause
+            </button>
+        </div>
+
+        <!-- Filter -->
+        <div class="mt-2">
+            <div class="btn-group btn-group-sm w-100" id="levelFilter" role="group">
+                <input type="radio" class="btn-check" name="lvl" id="lvlAll" value="" checked>
+                <label class="btn btn-outline-secondary" for="lvlAll">All</label>
+                <input type="radio" class="btn-check" name="lvl" id="lvlInfo" value="info">
+                <label class="btn btn-outline-secondary" for="lvlInfo">Info</label>
+                <input type="radio" class="btn-check" name="lvl" id="lvlWarn" value="warning">
+                <label class="btn btn-outline-warning" for="lvlWarn">Warn</label>
+                <input type="radio" class="btn-check" name="lvl" id="lvlErr" value="error">
+                <label class="btn btn-outline-danger" for="lvlErr">Error</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: terminal -->
+    <div class="col-lg-9">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                <span class="small"><i class="bi bi-terminal me-2"></i>Live Log — @Model.Server.Name</span>
+                <div class="d-flex align-items-center gap-2" id="live-indicator">
+                    <span class="spinner-grow spinner-grow-sm text-success" role="status"></span>
+                    <span class="text-white-50 small">Connecting…</span>
+                </div>
+            </div>
+            <div id="log-container" class="bg-dark p-2"
+                 style="height:600px;overflow-y:auto;font-family:monospace;font-size:0.8rem">
+                <div class="text-white-50 px-2 py-1">
+                    Waiting for agent log events from <strong class="text-white">@Model.Server.Name</strong>…
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script src="~/lib/signalr/dist/browser/signalr.min.js"></script>
+<script>
+(function () {
+    const serverId = @Model.Server.Id;
+    const logContainer = document.getElementById('log-container');
+    const liveIndicator = document.getElementById('live-indicator');
+    let paused = false;
+    let filterLevel = '';
+
+    // ── SignalR ──────────────────────────────────────────────────────────────
+    const conn = new signalR.HubConnectionBuilder()
+        .withUrl('/hubs/monitoring')
+        .withAutomaticReconnect()
+        .build();
+
+    conn.on('OnAgentLog', evt => {
+        if (evt.serverId !== serverId) return;
+        appendLog(evt.timestamp, evt.category ? `[${evt.category}] ${evt.message}` : evt.message, evt.level);
+    });
+
+    conn.on('OnCommandResult', evt => {
+        if (evt.serverId !== serverId) return;
+        const status = evt.success ? '✓' : '✗';
+        const level = evt.success ? 'Info' : 'Error';
+        appendLog(null, `${status} Command result: ${evt.commandType} — ${evt.message || (evt.success ? 'OK' : evt.error)}`, level);
+    });
+
+    conn.on('OnServerStatusChange', evt => {
+        if (evt.serverId !== serverId) return;
+        const badge = document.getElementById('agent-status-badge');
+        if (badge) {
+            badge.textContent = evt.status;
+            badge.className = 'badge ' + (evt.status === 'Online' ? 'bg-success' : 'bg-danger');
+        }
+        appendLog(null, `Agent status changed: ${evt.status}`, evt.status === 'Online' ? 'Info' : 'Warning');
+    });
+
+    conn.on('OnServerHealthUpdate', evt => {
+        if (evt.serverId !== serverId) return;
+        document.getElementById('health-card').style.display = '';
+        document.getElementById('h-cpu').textContent   = evt.cpuPercent?.toFixed(1) ?? '—';
+        document.getElementById('h-ram').textContent   = `${evt.ramUsedMB ?? '—'} / ${evt.ramTotalMB ?? '—'} MB`;
+        document.getElementById('h-disk').textContent  = `${evt.diskUsedGB ?? '—'} / ${evt.diskTotalGB ?? '—'} GB`;
+        document.getElementById('h-iis').textContent   = evt.iisRunning ? 'Running' : 'Stopped';
+        document.getElementById('h-sites').textContent = evt.runningSites ?? '—';
+        document.getElementById('h-pools').textContent = evt.runningAppPools ?? '—';
+        document.getElementById('last-heartbeat').textContent = new Date(evt.timestamp).toTimeString().substring(0, 8);
+        appendLog(evt.timestamp,
+            `Heartbeat — CPU: ${evt.cpuPercent?.toFixed(1)}%  RAM: ${evt.ramUsedMB}/${evt.ramTotalMB} MB  Sites: ${evt.runningSites}  Pools: ${evt.runningAppPools}`,
+            'Info');
+    });
+
+    conn.start()
+        .then(() => {
+            conn.invoke('SubscribeToServer', serverId);
+            liveIndicator.innerHTML = '<span class="spinner-grow spinner-grow-sm text-success" role="status"></span><span class="text-white-50 small">Streaming</span>';
+        })
+        .catch(err => {
+            liveIndicator.innerHTML = '<span class="text-danger small"><i class="bi bi-exclamation-triangle me-1"></i>Connection failed</span>';
+        });
+
+    conn.onreconnected(() => {
+        conn.invoke('SubscribeToServer', serverId);
+        appendLog(null, 'Reconnected to portal.', 'Info');
+        liveIndicator.innerHTML = '<span class="spinner-grow spinner-grow-sm text-success" role="status"></span><span class="text-white-50 small">Streaming</span>';
+    });
+
+    conn.onclose(() => {
+        liveIndicator.innerHTML = '<span class="text-danger small"><i class="bi bi-wifi-off me-1"></i>Disconnected</span>';
+    });
+
+    // ── Log rendering ────────────────────────────────────────────────────────
+    function appendLog(timestamp, message, level) {
+        if (paused) return;
+        const lvl = (level || 'info').toLowerCase();
+        if (filterLevel && lvl !== filterLevel) return;
+
+        const colorClass = lvl === 'error' ? 'text-danger'
+                         : lvl === 'warning' ? 'text-warning'
+                         : 'text-white-50';
+
+        const ts = timestamp
+            ? new Date(timestamp).toTimeString().substring(0, 8)
+            : new Date().toTimeString().substring(0, 8);
+
+        const line = document.createElement('div');
+        line.className = `px-2 py-0 log-line ${colorClass}`;
+        line.dataset.level = lvl;
+        line.innerHTML = `<span class="text-secondary me-2">${ts}</span>${escHtml(message)}`;
+        logContainer.appendChild(line);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function escHtml(str) {
+        return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // ── Controls ─────────────────────────────────────────────────────────────
+    document.getElementById('clearBtn').addEventListener('click', () => {
+        logContainer.innerHTML = '';
+    });
+
+    const pauseBtn = document.getElementById('pauseBtn');
+    pauseBtn.addEventListener('click', () => {
+        paused = !paused;
+        pauseBtn.innerHTML = paused
+            ? '<i class="bi bi-play-fill me-1"></i>Resume'
+            : '<i class="bi bi-pause-fill me-1"></i>Pause';
+        pauseBtn.classList.toggle('btn-warning', paused);
+        pauseBtn.classList.toggle('btn-outline-secondary', !paused);
+    });
+
+    document.querySelectorAll('input[name="lvl"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+            filterLevel = radio.value;
+            document.querySelectorAll('.log-line').forEach(line => {
+                const match = !filterLevel || line.dataset.level === filterLevel;
+                line.style.display = match ? '' : 'none';
+            });
+        });
+    });
+})();
+</script>
+}

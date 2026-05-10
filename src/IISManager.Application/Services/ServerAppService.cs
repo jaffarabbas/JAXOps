@@ -185,6 +185,24 @@ public class ServerAppService : IServerAppService
         return await _agentComm.SendCommandAsync(serverId, cmd);
     }
 
+    public async Task<Result> RestartWebsiteAsync(int serverId, string siteName)
+    {
+        var cmd = new WebsiteCommand { CommandType = CommandType.RestartWebsite, ServerId = serverId, WebsiteName = siteName };
+        return await _agentComm.SendCommandAsync(serverId, cmd);
+    }
+
+    public async Task<Result> DeleteWebsiteAsync(int serverId, string siteName)
+    {
+        var cmd = new WebsiteCommand { CommandType = CommandType.DeleteWebsite, ServerId = serverId, WebsiteName = siteName };
+        return await _agentComm.SendCommandAsync(serverId, cmd);
+    }
+
+    public async Task<Result> DeleteAppPoolAsync(int serverId, string poolName)
+    {
+        var cmd = new AppPoolCommand { CommandType = CommandType.DeleteApplicationPool, ServerId = serverId, AppPoolName = poolName };
+        return await _agentComm.SendCommandAsync(serverId, cmd);
+    }
+
     public async Task<Result> CreateWebsiteAsync(int serverId, CreateWebsiteDto dto)
     {
         var cmd = new WebsiteCommand

@@ -90,6 +90,22 @@ public class ServerDetailsModel : PageModel
         return RedirectToPage(new { id });
     }
 
+    public async Task<IActionResult> OnPostRestartSiteAsync(int id, string siteName)
+    {
+        var result = await _service.RestartWebsiteAsync(id, siteName);
+        TempData[result.IsSuccess ? "Success" : "Error"] = result.IsSuccess
+            ? $"Restart command sent to '{siteName}'." : result.Error;
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostDeleteSiteAsync(int id, string siteName)
+    {
+        var result = await _service.DeleteWebsiteAsync(id, siteName);
+        TempData[result.IsSuccess ? "Success" : "Error"] = result.IsSuccess
+            ? $"Delete command sent for '{siteName}'." : result.Error;
+        return RedirectToPage(new { id });
+    }
+
     public async Task<IActionResult> OnPostCreateSiteAsync(int id)
     {
         if (string.IsNullOrWhiteSpace(NewSite.Name) || string.IsNullOrWhiteSpace(NewSite.PhysicalPath))
@@ -136,6 +152,14 @@ public class ServerDetailsModel : PageModel
         var result = await _service.RecycleAppPoolAsync(id, poolName);
         TempData[result.IsSuccess ? "Success" : "Error"] = result.IsSuccess
             ? $"Recycle command sent to pool '{poolName}'." : result.Error;
+        return RedirectToPage(new { id });
+    }
+
+    public async Task<IActionResult> OnPostDeletePoolAsync(int id, string poolName)
+    {
+        var result = await _service.DeleteAppPoolAsync(id, poolName);
+        TempData[result.IsSuccess ? "Success" : "Error"] = result.IsSuccess
+            ? $"Delete command sent for pool '{poolName}'." : result.Error;
         return RedirectToPage(new { id });
     }
 

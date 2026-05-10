@@ -62,6 +62,17 @@
                                 <a href="/Deployments/Console?id=@d.Id" class="btn btn-outline-primary" title="Live Console">
                                     <i class="bi bi-terminal"></i>
                                 </a>
+                                @if (d.Status == IISManager.Domain.Enums.DeploymentStatus.Queued ||
+                                     d.Status == IISManager.Domain.Enums.DeploymentStatus.InProgress)
+                                {
+                                    <form method="post" asp-page-handler="Cancel"
+                                          onsubmit="return confirm('Cancel deployment #@d.Id?')">
+                                        <input type="hidden" name="deploymentId" value="@d.Id" />
+                                        <button class="btn btn-outline-danger" title="Cancel">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                    </form>
+                                }
                                 @if (d.Status == IISManager.Domain.Enums.DeploymentStatus.Succeeded)
                                 {
                                     <form method="post" asp-page-handler="Rollback"

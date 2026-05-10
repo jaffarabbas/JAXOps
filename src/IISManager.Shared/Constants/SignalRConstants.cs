@@ -23,6 +23,7 @@ public static class SignalRConstants
         public const string ReportDeploymentCompleted = "ReportDeploymentCompleted";
         public const string ReportIISState = "ReportIISState";
         public const string ReportCommandResult = "ReportCommandResult";
+        public const string ReportAgentLog = "ReportAgentLog";
     }
 
     public static class ClientMethods
@@ -34,6 +35,7 @@ public static class SignalRConstants
         public const string OnServerStatusChange = "OnServerStatusChange";
         public const string OnNotification = "OnNotification";
         public const string OnIISStateUpdate = "OnIISStateUpdate";
+        public const string OnAgentLog = "OnAgentLog";
     }
 
     public static class Groups

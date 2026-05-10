@@ -48,4 +48,20 @@ public class ApplicationPoolRepository : IApplicationPoolRepository
         using var conn = _db.CreateConnection();
         await conn.ExecuteAsync("DELETE FROM ApplicationPools WHERE ServerId = @ServerId", new { ServerId = serverId });
     }
+
+    public async Task DeleteStaleAsync(int serverId, IEnumerable<string> activeNames)
+    {
+        using var conn = _db.CreateConnection();
+        var names = activeNames.ToList();
+        if (names.Count == 0)
+        {
+            await conn.ExecuteAsync("DELETE FROM ApplicationPools WHERE ServerId = @ServerId", new { ServerId = serverId });
+        }
+        else
+        {
+            await conn.ExecuteAsync(
+                "DELETE FROM ApplicationPools WHERE ServerId = @ServerId AND Name NOT IN @Names",
+                new { ServerId = serverId, Names = names });
+        }
+    }
 }

@@ -16,9 +16,12 @@ public interface IServerAppService
     Task<Result> SyncIISStateAsync(int serverId);
     Task<Result> StartWebsiteAsync(int serverId, string siteName);
     Task<Result> StopWebsiteAsync(int serverId, string siteName);
+    Task<Result> RestartWebsiteAsync(int serverId, string siteName);
+    Task<Result> DeleteWebsiteAsync(int serverId, string siteName);
     Task<Result> StartAppPoolAsync(int serverId, string poolName);
     Task<Result> StopAppPoolAsync(int serverId, string poolName);
     Task<Result> RecycleAppPoolAsync(int serverId, string poolName);
+    Task<Result> DeleteAppPoolAsync(int serverId, string poolName);
     Task<Result> CreateWebsiteAsync(int serverId, CreateWebsiteDto dto);
     Task<Result> CreateAppPoolAsync(int serverId, CreateAppPoolDto dto);
 }

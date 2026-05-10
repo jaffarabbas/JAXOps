@@ -167,6 +167,7 @@ public class AgentHub : Hub
                 LastSyncedAt = now
             });
         }
+        await _websiteRepo.DeleteStaleAsync(serverId, evt.Sites.Select(s => s.IISId));
 
         foreach (var p in evt.AppPools)
         {
@@ -181,6 +182,7 @@ public class AgentHub : Hub
                 LastSyncedAt = now
             });
         }
+        await _poolRepo.DeleteStaleAsync(serverId, evt.AppPools.Select(p => p.Name));
 
         _logger.LogInformation("IIS state synced for server {ServerId}: {Sites} sites, {Pools} pools",
             serverId, evt.Sites.Count, evt.AppPools.Count);
@@ -277,6 +279,21 @@ public class AgentHub : Hub
                 status = status.ToString(),
                 failureReason = evt.FailureReason,
                 durationSeconds = (int)evt.Duration.TotalSeconds
+            });
+    }
+
+    public async Task ReportAgentLog(AgentLogEvent evt)
+    {
+        if (!TryGetServerId(out var serverId)) return;
+        await _monitorHub.Clients
+            .Group(SignalRConstants.Groups.Server(serverId))
+            .SendAsync(SignalRConstants.ClientMethods.OnAgentLog, new
+            {
+                serverId,
+                message = evt.Message,
+                level = evt.Level,
+                category = evt.Category,
+                timestamp = DateTime.UtcNow
             });
     }
 

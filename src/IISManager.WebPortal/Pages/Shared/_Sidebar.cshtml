@@ -25,6 +25,12 @@
             </a>
         </li>
         <li class="nav-item">
+            <a class="nav-link text-white @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Agents") == true ? "active" : "")"
+               href="/Agents">
+                <i class="bi bi-terminal me-2"></i>Agent Logs
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link text-white @(ViewContext.RouteData.Values["page"]?.ToString()?.StartsWith("/Audit") == true ? "active" : "")"
                href="/Audit">
                 <i class="bi bi-journal-text me-2"></i>Audit Logs

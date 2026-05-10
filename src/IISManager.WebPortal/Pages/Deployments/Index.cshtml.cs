@@ -29,4 +29,12 @@ public class DeploymentsIndexModel : PageModel
             ? $"Rollback initiated (#{result.Value})" : result.Error;
         return RedirectToPage();
     }
+
+    public async Task<IActionResult> OnPostCancelAsync(int deploymentId)
+    {
+        var result = await _service.CancelDeploymentAsync(deploymentId, User.Identity?.Name ?? "system");
+        TempData[result.IsSuccess ? "Success" : "Error"] = result.IsSuccess
+            ? $"Deployment #{deploymentId} cancelled." : result.Error;
+        return RedirectToPage();
+    }
 }

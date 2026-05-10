@@ -16,6 +16,7 @@ public class DeploymentAppService : IDeploymentAppService
     private readonly IPackageRepository _packages;
     private readonly IServerRepository _servers;
     private readonly IAgentCommunicationService _agentComm;
+    private readonly IDeploymentBroadcaster _broadcaster;
     private readonly IAuditAppService _audit;
     private readonly ILogger<DeploymentAppService> _logger;
 
@@ -24,6 +25,7 @@ public class DeploymentAppService : IDeploymentAppService
         IPackageRepository packages,
         IServerRepository servers,
         IAgentCommunicationService agentComm,
+        IDeploymentBroadcaster broadcaster,
         IAuditAppService audit,
         ILogger<DeploymentAppService> logger)
     {
@@ -31,6 +33,7 @@ public class DeploymentAppService : IDeploymentAppService
         _packages = packages;
         _servers = servers;
         _agentComm = agentComm;
+        _broadcaster = broadcaster;
         _audit = audit;
         _logger = logger;
     }
@@ -147,7 +150,8 @@ public class DeploymentAppService : IDeploymentAppService
     {
         var deployment = await _deployments.GetByIdAsync(id);
         if (deployment is null) return Result.Fail("Deployment not found");
-        if (deployment.Status != DeploymentStatus.Queued) return Result.Fail("Only queued deployments can be cancelled");
+        if (deployment.Status != DeploymentStatus.Queued && deployment.Status != DeploymentStatus.InProgress)
+            return Result.Fail("Only queued or in-progress deployments can be cancelled");
 
         await _deployments.UpdateStatusAsync(id, DeploymentStatus.Cancelled, completedAt: DateTime.UtcNow);
         return Result.Ok();
@@ -176,6 +180,8 @@ public class DeploymentAppService : IDeploymentAppService
             _logger.LogError(ex, "Failed to dispatch deployment commands for deployment {DeploymentId}", deploymentId);
             await _deployments.UpdateStatusAsync(deploymentId, DeploymentStatus.Failed,
                 completedAt: DateTime.UtcNow, failureReason: ex.Message);
+            await _broadcaster.BroadcastLogLineAsync(deploymentId, null, $"Deployment failed: {ex.Message}", "Error");
+            await _broadcaster.BroadcastStatusChangeAsync(deploymentId, DeploymentStatus.Failed.ToString());
         }
     }
 
@@ -195,7 +201,24 @@ public class DeploymentAppService : IDeploymentAppService
             Version = package.Version,
             CreateBackup = true
         };
-        await _agentComm.SendCommandAsync(target.ServerId, cmd);
+        var result = await _agentComm.SendCommandAsync(target.ServerId, cmd);
+        if (!result.IsSuccess)
+        {
+            var reason = result.Error ?? "Agent unreachable";
+            var logMessage = $"[{target.ServerName ?? $"Server {target.ServerId}"}] {reason}";
+            await _deployments.UpdateTargetStatusAsync(target.Id, DeploymentStatus.Failed,
+                startedAt: DateTime.UtcNow, completedAt: DateTime.UtcNow, failureReason: reason);
+            await _deployments.InsertLogAsync(new DeploymentLog
+            {
+                DeploymentId = target.DeploymentId,
+                ServerId = target.ServerId,
+                Message = logMessage,
+                Level = "Error",
+                Timestamp = DateTime.UtcNow
+            });
+            await _broadcaster.BroadcastLogLineAsync(target.DeploymentId, target.ServerId, logMessage, "Error");
+            throw new InvalidOperationException(reason);
+        }
     }
 
     private static DeploymentDto MapToDto(Deployment d, IEnumerable<DeploymentTarget> targets) => new()

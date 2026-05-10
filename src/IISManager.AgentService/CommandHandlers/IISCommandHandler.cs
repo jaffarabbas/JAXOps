@@ -55,6 +55,16 @@ public class IISCommandHandler : ICommandHandler
                 error = r.Error;
                 break;
             }
+            case CommandType.RestartWebsite:
+            {
+                var cmd = (WebsiteCommand)command;
+                var stopResult = _iis.StopSite(cmd.WebsiteName);
+                if (!stopResult.IsSuccess) { success = false; error = stopResult.Error; break; }
+                var startResult = _iis.StartSite(cmd.WebsiteName);
+                success = startResult.IsSuccess;
+                error = startResult.Error;
+                break;
+            }
             case CommandType.StartApplicationPool:
             {
                 var cmd = (AppPoolCommand)command;

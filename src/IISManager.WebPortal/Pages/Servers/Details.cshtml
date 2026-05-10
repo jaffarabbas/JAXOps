@@ -168,6 +168,21 @@
                                                 </button>
                                             </form>
                                         }
+                                        <form method="post" asp-page-handler="RestartSite" class="iis-action-form">
+                                            <input type="hidden" name="id" value="@Model.Server.Id" />
+                                            <input type="hidden" name="siteName" value="@w.Name" />
+                                            <button class="btn btn-warning btn-sm" title="Restart">
+                                                <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" asp-page-handler="DeleteSite" class="iis-action-form"
+                                              onsubmit="return confirm('Permanently delete site @w.Name from IIS?')">
+                                            <input type="hidden" name="id" value="@Model.Server.Id" />
+                                            <input type="hidden" name="siteName" value="@w.Name" />
+                                            <button class="btn btn-outline-danger btn-sm" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
@@ -263,6 +278,14 @@
                                             <input type="hidden" name="poolName" value="@p.Name" />
                                             <button class="btn btn-warning btn-sm" title="Recycle">
                                                 <i class="bi bi-arrow-repeat"></i>
+                                            </button>
+                                        </form>
+                                        <form method="post" asp-page-handler="DeletePool" class="iis-action-form"
+                                              onsubmit="return confirm('Permanently delete app pool @p.Name from IIS?')">
+                                            <input type="hidden" name="id" value="@Model.Server.Id" />
+                                            <input type="hidden" name="poolName" value="@p.Name" />
+                                            <button class="btn btn-outline-danger btn-sm" title="Delete">
+                                                <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
                                     </div>

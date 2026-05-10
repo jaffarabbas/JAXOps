@@ -8,4 +8,5 @@ public interface IApplicationPoolRepository
     Task<ApplicationPool?> GetByServerAndNameAsync(int serverId, string name);
     Task UpsertAsync(ApplicationPool appPool);
     Task DeleteByServerIdAsync(int serverId);
+    Task DeleteStaleAsync(int serverId, IEnumerable<string> activeNames);
 }
