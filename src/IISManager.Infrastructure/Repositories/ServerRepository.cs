@@ -69,6 +69,20 @@ public class ServerRepository : IServerRepository
             """, new { Id = id, Status = status, ConnectionId = connectionId, LastHeartbeat = lastHeartbeat });
     }
 
+    public async Task MarkStaleServersOfflineAsync(DateTime cutoff)
+    {
+        using var conn = _db.CreateConnection();
+        await conn.ExecuteAsync("""
+            UPDATE Servers SET
+                Status = 'Offline',
+                AgentConnectionId = NULL,
+                UpdatedAt = GETUTCDATE()
+            WHERE IsActive = 1
+              AND Status = 'Online'
+              AND (LastHeartbeat IS NULL OR LastHeartbeat < @Cutoff)
+            """, new { Cutoff = cutoff });
+    }
+
     public async Task DeleteAsync(int id)
     {
         using var conn = _db.CreateConnection();

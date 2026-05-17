@@ -1,10 +1,8 @@
 using IISManager.Shared.Constants;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 
 namespace IISManager.WebPortal.Hubs;
 
-[Authorize]
 public class MonitoringHub : Hub
 {
     private readonly ILogger<MonitoringHub> _logger;

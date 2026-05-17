@@ -76,6 +76,12 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Background);
     }
 
+    private void CodebaseComboBox_DropDownOpened(object sender, EventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+            vm.CodebaseSearchText = string.Empty;
+    }
+
     private void FindInEditor_Click(object sender, RoutedEventArgs e)
     {
         _ = TrySelectEditorMatch(EditorSearchBox.Text, findNext: true, focusEditor: false);

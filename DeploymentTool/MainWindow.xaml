@@ -171,9 +171,7 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="200"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="220"/>
                                 <ColumnDefinition Width="20"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -182,23 +180,24 @@
 
                             <TextBlock Grid.Column="0" Text="Codebase" Style="{StaticResource SectionLabel}" Margin="0,0,8,0"/>
                             <ComboBox Grid.Column="1"
+                                      x:Name="PublishCodebaseComboBox"
+                                      IsEditable="True"
+                                      StaysOpenOnEdit="True"
+                                      IsTextSearchEnabled="False"
                                       ItemsSource="{Binding FilteredCodebases}"
                                       SelectedItem="{Binding SelectedCodebase}"
                                       DisplayMemberPath="Name"
-                                      Height="30" VerticalContentAlignment="Center"/>
+                                      Text="{Binding CodebaseSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                      DropDownOpened="CodebaseComboBox_DropDownOpened"
+                                      Height="30" VerticalContentAlignment="Center" Padding="6,0"
+                                      ToolTip="Type to search codebases"/>
 
-                                <TextBox Grid.Column="3"
-                                     Text="{Binding CodebaseSearchText, UpdateSourceTrigger=PropertyChanged}"
-                                     Height="30" VerticalContentAlignment="Center"
-                                     Padding="6,0" FontSize="11"
-                                     ToolTip="Search codebases by name or path"/>
-
-                                <TextBlock Grid.Column="5" Text="Output Folder" Style="{StaticResource SectionLabel}" Margin="0,0,8,0"/>
-                                <TextBox Grid.Column="6"
+                                <TextBlock Grid.Column="3" Text="Output Folder" Style="{StaticResource SectionLabel}" Margin="0,0,8,0"/>
+                                <TextBox Grid.Column="4"
                                      Text="{Binding PublishOutputFolder, UpdateSourceTrigger=PropertyChanged}"
                                      Height="30" VerticalContentAlignment="Center"
                                      Padding="6,0" FontFamily="Consolas" FontSize="12"/>
-                                <Button Grid.Column="7" Content="Browse…"
+                                <Button Grid.Column="5" Content="Browse…"
                                     Command="{Binding BrowseOutputFolderCommand}"
                                     Style="{StaticResource SmallBtn}"
                                     Height="30" Margin="6,0,0,0"/>
@@ -710,67 +709,138 @@
             <TabItem Header="  AppSettings  " FontSize="13">
                 <Grid Margin="0,8,0,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>   <!-- codebase strip -->
                         <RowDefinition Height="Auto"/>   <!-- global changer bar -->
                         <RowDefinition Height="*"/>      <!-- two panels -->
                     </Grid.RowDefinitions>
 
-                    <!-- GLOBAL CHANGER BAR ──────────────────────────────── -->
+                    <!-- CODEBASE STRIP ──────────────────────────────────── -->
                     <Border Grid.Row="0" Style="{StaticResource Card}" Margin="0,0,0,8">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="180"/>
-                                <ColumnDefinition Width="20"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="200"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="8"/>
-                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-
-                            <TextBlock Grid.Column="0" Text="Global Key"
-                                       Style="{StaticResource SectionLabel}"/>
-                            <TextBox Grid.Column="2"
-                                     Text="{Binding GlobalKey, UpdateSourceTrigger=PropertyChanged}"
-                                     Height="30" VerticalContentAlignment="Center"
-                                     Padding="6,0" FontFamily="Consolas" FontSize="12"
-                                     BorderBrush="{DynamicResource InputBorderBrush}"
-                                     ToolTip="Key to update (use : for nested JSON, e.g. Logging:LogLevel:Default)"/>
-
-                            <TextBlock Grid.Column="4" Text="New Value"
-                                       Style="{StaticResource SectionLabel}"/>
-                            <TextBox Grid.Column="6"
-                                     Text="{Binding GlobalValue, UpdateSourceTrigger=PropertyChanged}"
-                                     Height="30" VerticalContentAlignment="Center"
-                                     Padding="6,0" FontFamily="Consolas" FontSize="12"
-                                     BorderBrush="{DynamicResource InputBorderBrush}"
-                                     ToolTip="Value to write into every matching key"/>
-
-                            <Button Grid.Column="8"
-                                    Content="Apply to Selected Files"
-                                    Command="{Binding ApplyGlobalChangeCommand}"
-                                    Style="{StaticResource PrimaryBtn}"
-                                    Background="#D97706"
-                                    Height="30"
-                                    FontSize="11"
-                                    Padding="10,0"/>
-
-                            <Button Grid.Column="10"
-                                    Content="Save All Modified"
-                                    Command="{Binding SaveAllModifiedCommand}"
-                                    Style="{StaticResource PrimaryBtn}"
-                                    Background="#059669"
-                                    Height="30"
-                                    FontSize="11"
-                                    Padding="10,0"/>
+                            <TextBlock Grid.Column="0" Text="Codebase" Style="{StaticResource SectionLabel}" Margin="0,0,8,0"/>
+                            <ComboBox Grid.Column="1"
+                                      x:Name="AppSettingsCodebaseComboBox"
+                                      IsEditable="True"
+                                      StaysOpenOnEdit="True"
+                                      IsTextSearchEnabled="False"
+                                      ItemsSource="{Binding FilteredCodebases}"
+                                      SelectedItem="{Binding AppSettingsSelectedCodebase}"
+                                      DisplayMemberPath="Name"
+                                      Text="{Binding CodebaseSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                      DropDownOpened="CodebaseComboBox_DropDownOpened"
+                                      Height="30" VerticalContentAlignment="Center" Padding="6,0"
+                                      ToolTip="Type to search codebases — selecting auto-loads all config files"/>
+                            <TextBlock Grid.Column="2"
+                                       Text="← Select a codebase to automatically load all config files"
+                                       VerticalAlignment="Center" Margin="12,0,0,0"
+                                       FontStyle="Italic" FontSize="11"
+                                       Foreground="{DynamicResource TextMutedBrush}"/>
                         </Grid>
                     </Border>
 
+                    <!-- GLOBAL CHANGER BAR ──────────────────────────────── -->
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,0,0,8">
+                        <StackPanel>
+                            <!-- Row 1: key-based change -->
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="Global Key"
+                                           Style="{StaticResource SectionLabel}"/>
+                                <TextBox Grid.Column="2"
+                                         Text="{Binding GlobalKey, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" VerticalContentAlignment="Center"
+                                         Padding="6,0" FontFamily="Consolas" FontSize="12"
+                                         BorderBrush="{DynamicResource InputBorderBrush}"
+                                         ToolTip="Key to update (use : for nested JSON, e.g. Logging:LogLevel:Default)"/>
+
+                                <TextBlock Grid.Column="4" Text="New Value"
+                                           Style="{StaticResource SectionLabel}"/>
+                                <TextBox Grid.Column="6"
+                                         Text="{Binding GlobalValue, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" VerticalContentAlignment="Center"
+                                         Padding="6,0" FontFamily="Consolas" FontSize="12"
+                                         BorderBrush="{DynamicResource InputBorderBrush}"
+                                         ToolTip="Value to write into every matching key"/>
+
+                                <Button Grid.Column="8"
+                                        Content="Apply to Selected Files"
+                                        Command="{Binding ApplyGlobalChangeCommand}"
+                                        Style="{StaticResource PrimaryBtn}"
+                                        Background="#D97706"
+                                        Height="30" FontSize="11" Padding="10,0"/>
+
+                                <Button Grid.Column="10"
+                                        Content="Save All Modified"
+                                        Command="{Binding SaveAllModifiedCommand}"
+                                        Style="{StaticResource PrimaryBtn}"
+                                        Background="#059669"
+                                        Height="30" FontSize="11" Padding="10,0"/>
+                            </Grid>
+
+                            <!-- Row 2: text-level replace all -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="20"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.Column="0" Text="Find Text"
+                                           Style="{StaticResource SectionLabel}"
+                                           ToolTip="Search any text across all selected files (e.g. a URL)"/>
+                                <TextBox Grid.Column="2"
+                                         Text="{Binding ReplaceSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" VerticalContentAlignment="Center"
+                                         Padding="6,0" FontFamily="Consolas" FontSize="12"
+                                         BorderBrush="{DynamicResource InputBorderBrush}"
+                                         ToolTip="Text to find (exact match, case-sensitive) across all selected config files"/>
+
+                                <TextBlock Grid.Column="4" Text="Replace With"
+                                           Style="{StaticResource SectionLabel}"/>
+                                <TextBox Grid.Column="6"
+                                         Text="{Binding ReplaceWithText, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" VerticalContentAlignment="Center"
+                                         Padding="6,0" FontFamily="Consolas" FontSize="12"
+                                         BorderBrush="{DynamicResource InputBorderBrush}"
+                                         ToolTip="Replacement text"/>
+
+                                <Button Grid.Column="8"
+                                        Content="Replace All in Selected"
+                                        Command="{Binding ReplaceAllCommand}"
+                                        Style="{StaticResource PrimaryBtn}"
+                                        Background="#7C3AED"
+                                        Height="30" FontSize="11" Padding="10,0"
+                                        ToolTip="Replaces every occurrence of the search text in all checked config files, regardless of key name"/>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
                     <!-- TWO PANELS ──────────────────────────────────────── -->
-                    <Grid Grid.Row="1">
+                    <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>    <!-- file list -->
                             <ColumnDefinition Width="10"/>
@@ -1153,9 +1223,9 @@
             <TabItem Header="  Settings  " FontSize="13">
                 <Grid Margin="0,8,0,0">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>   <!-- Codebases header -->
+                        <RowDefinition Height="*"/>      <!-- content area -->
+                        <RowDefinition Height="Auto"/>   <!-- save button -->
                     </Grid.RowDefinitions>
 
                     <!-- Codebases header card with collapse toggle -->
@@ -2229,20 +2299,11 @@
                                                        FontSize="10" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextMutedBrush}"
                                                        VerticalAlignment="Center"/>
-                                            <StackPanel Grid.Column="2" Orientation="Horizontal">
-                                                <Button Content="+" Command="{Binding VbPublisher.Repositories.AddRepoCommand}"
-                                                        Style="{StaticResource SmallBtn}" Padding="5,1" Margin="0,0,2,0"
-                                                        ToolTip="Add repository"/>
-                                                <Button Content="−" Command="{Binding VbPublisher.Repositories.RemoveRepoCommand}"
-                                                        Style="{StaticResource SmallBtn}" Padding="5,1" Margin="0,0,2,0"
-                                                        ToolTip="Remove selected repository"/>
-                                                <Button Content="📁" Command="{Binding VbPublisher.Repositories.BrowseRepoPathCommand}"
-                                                        Style="{StaticResource SmallBtn}" Padding="5,1" Margin="0,0,2,0"
-                                                        ToolTip="Browse local path for selected repository"/>
-                                                <Button Content="💾" Command="{Binding VbPublisher.Repositories.SaveReposCommand}"
-                                                        Style="{StaticResource SmallBtn}" Padding="5,1"
-                                                        ToolTip="Save repositories to appsettings.json"/>
-                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="configure in Settings tab"
+                                                       FontSize="9" FontStyle="Italic"
+                                                       Foreground="{DynamicResource TextFaintBrush}"
+                                                       VerticalAlignment="Center" Margin="0,0,4,0"/>
                                         </Grid>
                                     </Border>
 

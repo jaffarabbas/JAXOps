@@ -55,6 +55,9 @@ public class MainViewModel : BaseViewModel
     private string _settingsPatchOutputRoot = string.Empty;
     private bool _isDarkMode;
     private bool _isCodebasesExpanded = true;
+    private Codebase? _appSettingsSelectedCodebase;
+    private string _replaceSearchText = string.Empty;
+    private string _replaceWithText = string.Empty;
 
     // ── Transfer tab sub-viewmodel ─────────────────────────────────────────────
     public TransferViewModel Transfer { get; }
@@ -372,6 +375,32 @@ public class MainViewModel : BaseViewModel
 
     public string EditorTitle => _selectedConfigFile?.FileName ?? "(no file selected)";
 
+    public Codebase? AppSettingsSelectedCodebase
+    {
+        get => _appSettingsSelectedCodebase;
+        set
+        {
+            if (SetField(ref _appSettingsSelectedCodebase, value) && value != null)
+                _ = LoadConfigFilesFromCodebaseAsync(value);
+        }
+    }
+
+    public string ReplaceSearchText
+    {
+        get => _replaceSearchText;
+        set
+        {
+            if (SetField(ref _replaceSearchText, value))
+                Application.Current.Dispatcher.InvokeAsync(CommandManager.InvalidateRequerySuggested);
+        }
+    }
+
+    public string ReplaceWithText
+    {
+        get => _replaceWithText;
+        set => SetField(ref _replaceWithText, value);
+    }
+
     // ── Counts ─────────────────────────────────────────────────────────────────
     public int ModifiedCount => FileChanges.Count(f => f.Status == ChangeStatus.Modified);
     public int NewCount      => FileChanges.Count(f => f.Status == ChangeStatus.New);
@@ -407,6 +436,7 @@ public class MainViewModel : BaseViewModel
     public ICommand SaveSettingsCommand { get; }
     public ICommand ValidateSelectedJsonCommand   { get; }
     public ICommand ToggleCodebasesCommand        { get; }
+    public ICommand ReplaceAllCommand             { get; }
 
     // ── Constructor ─────────────────────────────────────────────────────────────
     public MainViewModel()
@@ -592,6 +622,8 @@ public class MainViewModel : BaseViewModel
             SettingsCodebases.Add(editable);
         }
 
+        VbPublisher.LoadGitRepositories(DeriveGitReposFromCodebases(_config.Settings.Codebases));
+
         if (SettingsCodebases.Count > 0)
             SelectedSettingsCodebase = SettingsCodebases[0];
 
@@ -608,6 +640,15 @@ public class MainViewModel : BaseViewModel
 
         ToggleCodebasesCommand = new RelayCommand(
             () => IsCodebasesExpanded = !IsCodebasesExpanded);
+
+        ReplaceAllCommand = new RelayCommand(
+            async () =>
+            {
+                try { await ReplaceAllAsync(); }
+                catch (Exception ex) { AppendLog($"FATAL: {ex.Message}"); IsBusy = false; }
+            },
+            () => !IsBusy && !string.IsNullOrWhiteSpace(_replaceSearchText) && ConfigFiles.Any(f => f.IsSelected));
+
     }
 
     // ── Private methods ─────────────────────────────────────────────────────────
@@ -989,7 +1030,7 @@ public class MainViewModel : BaseViewModel
             PublishOutputRoot = SettingsPublishOutputRoot.Trim(),
             PatchOutputRoot   = SettingsPatchOutputRoot.Trim(),
             IsDarkMode        = IsDarkMode,
-            GitRepositories   = _config.Settings.GitRepositories
+            GitRepositories   = DeriveGitReposFromCodebases(cleaned)
         };
 
         IsBusy = true;
@@ -1009,7 +1050,9 @@ public class MainViewModel : BaseViewModel
             PublishOutputFolder = settings.PublishOutputRoot;
             OnPropertyChanged(nameof(PatchOutputRoot));
 
-            AppendLog($"Settings saved. Codebases: {settings.Codebases.Count}");
+            VbPublisher.LoadGitRepositories(settings.GitRepositories);
+
+            AppendLog($"Settings saved. Codebases: {settings.Codebases.Count}, Git repos derived: {settings.GitRepositories.Count}");
             MessageBox.Show("Settings saved to appsettings.json.", "Saved",
                 MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -1017,6 +1060,40 @@ public class MainViewModel : BaseViewModel
         {
             IsBusy = false;
         }
+    }
+
+    private static List<Models.Git.GitRepositoryConfig> DeriveGitReposFromCodebases(IEnumerable<Codebase> codebases)
+    {
+        var result = new List<Models.Git.GitRepositoryConfig>();
+        foreach (var cb in codebases)
+        {
+            if (!IsSourceCodePath(cb.Path)) continue;
+            result.Add(new Models.Git.GitRepositoryConfig
+            {
+                Name          = cb.Name,
+                LocalPath     = cb.Path,
+                DefaultBranch = "main"
+            });
+        }
+        return result;
+    }
+
+    private static bool IsSourceCodePath(string path)
+    {
+        if (!Directory.Exists(path)) return false;
+        if (Directory.Exists(Path.Combine(path, ".git"))) return true;
+
+        var opts = new EnumerationOptions
+        {
+            IgnoreInaccessible    = true,
+            RecurseSubdirectories = true,
+            MaxRecursionDepth     = 3
+        };
+        foreach (var pattern in new[] { "*.csproj", "*.sln", "*.vbproj" })
+            if (Directory.EnumerateFiles(path, pattern, opts).Any())
+                return true;
+
+        return false;
     }
 
     private async Task SaveGitRepositoriesAsync(IEnumerable<Models.Git.GitRepositoryConfig> repos)
@@ -1110,6 +1187,134 @@ public class MainViewModel : BaseViewModel
         {
             IsBusy = false;
         }
+    }
+
+    private async Task LoadConfigFilesFromCodebaseAsync(Codebase codebase)
+    {
+        IsBusy = true;
+
+        foreach (var f in ConfigFiles)
+            f.PropertyChanged -= OnConfigFileItemChanged;
+
+        ConfigFiles.Clear();
+        _fileContents.Clear();
+
+        _loadingFile  = true;
+        EditorContent = string.Empty;
+        _loadingFile  = false;
+        SelectedConfigFile = null;
+        IsEditorDirty = false;
+
+        AppendLog($"Scanning config files in '{codebase.Name}'…");
+
+        try
+        {
+            var projects = await _scanner.ScanAsync(codebase.Path);
+            if (projects.Count == 0)
+            {
+                AppendLog("No projects found in the selected codebase.");
+                return;
+            }
+
+            var files = await _appSettingsService.LoadConfigFilesAsync(projects);
+            foreach (var f in files)
+            {
+                f.PropertyChanged += OnConfigFileItemChanged;
+                f.IsSelected = true;
+                ConfigFiles.Add(f);
+            }
+
+            if (files.Count == 0)
+                AppendLog("No appsettings.json or web.config files found.");
+            else
+                AppendLog($"Found {files.Count} config file(s).");
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task ReplaceAllAsync()
+    {
+        var targets = ConfigFiles.Where(f => f.IsSelected).ToList();
+        if (targets.Count == 0)
+        {
+            MessageBox.Show("Check at least one file in the list before replacing.",
+                "No Files Selected", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_replaceSearchText))
+            return;
+
+        if (_selectedConfigFile != null && _isEditorDirty)
+        {
+            _fileContents[_selectedConfigFile.FilePath] = _editorContent;
+            _selectedConfigFile.IsModified = true;
+        }
+
+        IsBusy = true;
+        int changedFiles = 0;
+        int totalReplacements = 0;
+        AppendLog($"Replacing '{_replaceSearchText}' → '{_replaceWithText}' in {targets.Count} selected file(s)…");
+
+        try
+        {
+            foreach (var file in targets)
+            {
+                if (!_fileContents.TryGetValue(file.FilePath, out var content))
+                {
+                    try
+                    {
+                        content = await File.ReadAllTextAsync(file.FilePath, System.Text.Encoding.UTF8);
+                        _fileContents[file.FilePath] = content;
+                    }
+                    catch (Exception ex)
+                    {
+                        AppendLog($"ERROR reading {file.FileName}: {ex.Message}");
+                        continue;
+                    }
+                }
+
+                int count = CountOccurrences(content, _replaceSearchText);
+                if (count == 0) continue;
+
+                var updated = content.Replace(_replaceSearchText, _replaceWithText, StringComparison.Ordinal);
+                _fileContents[file.FilePath] = updated;
+                file.IsModified = true;
+                changedFiles++;
+                totalReplacements += count;
+
+                if (string.Equals(_selectedConfigFile?.FilePath, file.FilePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _loadingFile  = true;
+                    EditorContent = updated;
+                    _loadingFile  = false;
+                    IsEditorDirty = false;
+                }
+            }
+
+            AppendLog($"Replace complete. {totalReplacements} occurrence(s) replaced across {changedFiles} file(s). Use Save File / Save All to persist.");
+            if (changedFiles == 0)
+                MessageBox.Show($"No occurrences of '{_replaceSearchText}' found in the selected files.",
+                    "Nothing Replaced", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private static int CountOccurrences(string text, string pattern)
+    {
+        int count = 0, index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += pattern.Length;
+        }
+        return count;
     }
 
     private async Task LoadFileContentAsync(ConfigFileItem file)

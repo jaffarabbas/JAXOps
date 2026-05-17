@@ -16,34 +16,44 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((ctx, cfg) =>
     cfg.ReadFrom.Configuration(ctx.Configuration));
 
-// Authentication — Windows Auth
-builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
-    .AddNegotiate();
+// Windows Authentication — disabled by default; enable via Portal:UseWindowsAuth = true
+var useWindowsAuth = builder.Configuration.GetValue<bool>("Portal:UseWindowsAuth");
 
-// Authorization policies
+if (useWindowsAuth)
+{
+    builder.Services.AddAuthentication(NegotiateDefaults.AuthenticationScheme)
+        .AddNegotiate();
+}
+
+// Authorization policies — only enforced when Windows Auth is active
 builder.Services.AddAuthorization(opts =>
 {
-    opts.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
-        .RequireAuthenticatedUser()
-        .Build();
-    opts.AddPolicy("AdminOnly", p => p.RequireRole("IISManager-Admins"));
-    opts.AddPolicy("OperatorOrAbove", p => p.RequireRole("IISManager-Admins", "IISManager-Operators"));
-    opts.AddPolicy("ViewerOrAbove", p => p.RequireRole("IISManager-Admins", "IISManager-Operators", "IISManager-Viewers"));
+    if (useWindowsAuth)
+    {
+        opts.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+            .RequireAuthenticatedUser()
+            .Build();
+        opts.AddPolicy("AdminOnly", p => p.RequireRole("IISManager-Admins"));
+        opts.AddPolicy("OperatorOrAbove", p => p.RequireRole("IISManager-Admins", "IISManager-Operators"));
+        opts.AddPolicy("ViewerOrAbove", p => p.RequireRole("IISManager-Admins", "IISManager-Operators", "IISManager-Viewers"));
+    }
 });
 
 // Razor Pages
-// Note: role-based folder policies (OperatorOrAbove, ViewerOrAbove) require AD groups
-// IISManager-Admins / IISManager-Operators / IISManager-Viewers to be created in production.
-// In development any authenticated Windows user can access all pages.
+// Role-based folder policies (OperatorOrAbove, ViewerOrAbove) require AD groups
+// IISManager-Admins / IISManager-Operators / IISManager-Viewers to exist in production.
 var isDev = builder.Environment.IsDevelopment();
 builder.Services.AddRazorPages(opts =>
 {
-    opts.Conventions.AuthorizeFolder("/");
-    if (!isDev)
+    if (useWindowsAuth)
     {
-        opts.Conventions.AuthorizeFolder("/Servers", "OperatorOrAbove");
-        opts.Conventions.AuthorizeFolder("/Deployments", "OperatorOrAbove");
-        opts.Conventions.AuthorizeFolder("/Audit", "ViewerOrAbove");
+        opts.Conventions.AuthorizeFolder("/");
+        if (!isDev)
+        {
+            opts.Conventions.AuthorizeFolder("/Servers", "OperatorOrAbove");
+            opts.Conventions.AuthorizeFolder("/Deployments", "OperatorOrAbove");
+            opts.Conventions.AuthorizeFolder("/Audit", "ViewerOrAbove");
+        }
     }
 });
 
@@ -85,21 +95,27 @@ if (app.Environment.IsDevelopment())
 else
 {
     app.UseExceptionHandler("/Error");
-    app.UseHsts();
 }
 
-if (!app.Environment.IsDevelopment())
-    app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseSerilogRequestLogging();
 app.UseRouting();
-app.UseAuthentication();
+if (useWindowsAuth)
+    app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapHub<AgentHub>("/hubs/agent").AllowAnonymous(); // Agent auth handled inside hub
-app.MapHub<DeploymentHub>("/hubs/deployment");
-app.MapHub<MonitoringHub>("/hubs/monitoring");
+if (useWindowsAuth)
+{
+    app.MapHub<DeploymentHub>("/hubs/deployment").RequireAuthorization();
+    app.MapHub<MonitoringHub>("/hubs/monitoring").RequireAuthorization();
+}
+else
+{
+    app.MapHub<DeploymentHub>("/hubs/deployment").AllowAnonymous();
+    app.MapHub<MonitoringHub>("/hubs/monitoring").AllowAnonymous();
+}
 app.MapHealthChecks("/health");
 
 // Package download endpoint — accepts Windows Auth (browser) or Agent API key (agent)
@@ -130,6 +146,6 @@ app.MapGet("/api/deployments/{id:int}/status", async (int id, IDeploymentAppServ
     var d = await svc.GetByIdAsync(id);
     if (d is null) return Results.NotFound();
     return Results.Json(new { status = d.Status.ToString(), failureReason = d.FailureReason });
-}).RequireAuthorization();
+}).AllowAnonymous();
 
 app.Run();

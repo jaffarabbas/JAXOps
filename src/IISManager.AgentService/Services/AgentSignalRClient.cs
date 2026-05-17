@@ -73,6 +73,19 @@ public class AgentSignalRClient
 
         await _connection.StartAsync(ct);
         _logger.LogInformation("Agent connected to portal at {Url}", _config.PortalUrl);
+
+        // Small delay so OnConnectedAsync on the server can complete before we
+        // start invoking methods — avoids the race where the hub aborts the
+        // connection (e.g. invalid key) and we try to InvokeAsync mid-transition.
+        await Task.Delay(500, ct);
+
+        if (_connection.State != HubConnectionState.Connected)
+        {
+            _logger.LogWarning("Connection was closed immediately after start — hub may have rejected it");
+            await Task.Delay(TimeSpan.FromSeconds(15), ct); // back off before AgentWorker retries
+            return;
+        }
+
         await SendAgentLogAsync("Agent connected to portal", "Info", "Agent", ct);
 
         // Initial heartbeat
@@ -115,9 +128,16 @@ public class AgentSignalRClient
 
     public async Task SendEventAsync<T>(string method, T eventData, CancellationToken ct = default)
     {
-        if (_connection?.State == HubConnectionState.Connected)
+        if (_connection?.State != HubConnectionState.Connected)
+            return;
+        try
         {
             await _connection.InvokeAsync(method, eventData, ct);
+        }
+        catch (InvalidOperationException ex)
+        {
+            // Connection dropped between state check and invoke — will reconnect automatically
+            _logger.LogDebug(ex, "Send skipped: connection closed mid-invoke");
         }
     }
 
